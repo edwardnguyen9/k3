@@ -16,3 +16,10 @@ docs/crowdin.py
 *.mo
 /.coverage
 build/*
+
+.env
+github
+docs
+examples
+tests
+README.*
