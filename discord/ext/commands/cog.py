@@ -124,12 +124,12 @@ class CogMeta(type):
                 async def bar(self, ctx):
                     pass # hidden -> False
 
-    group_name: :class:`str`
+    group_name: Union[:class:`str`, :class:`~discord.app_commands.locale_str`]
         The group name of a cog. This is only applicable for :class:`GroupCog` instances.
         By default, it's the same value as :attr:`name`.
 
         .. versionadded:: 2.0
-    group_description: :class:`str`
+    group_description: Union[:class:`str`, :class:`~discord.app_commands.locale_str`]
         The group description of a cog. This is only applicable for :class:`GroupCog` instances.
         By default, it's the same value as :attr:`description`.
 
@@ -143,8 +143,8 @@ class CogMeta(type):
 
     __cog_name__: str
     __cog_description__: str
-    __cog_group_name__: str
-    __cog_group_description__: str
+    __cog_group_name__: Union[str, app_commands.locale_str]
+    __cog_group_description__: Union[str, app_commands.locale_str]
     __cog_group_nsfw__: bool
     __cog_settings__: Dict[str, Any]
     __cog_commands__: List[Command[Any, ..., Any]]
@@ -260,8 +260,8 @@ class Cog(metaclass=CogMeta):
 
     __cog_name__: str
     __cog_description__: str
-    __cog_group_name__: str
-    __cog_group_description__: str
+    __cog_group_name__: Union[str, app_commands.locale_str]
+    __cog_group_description__: Union[str, app_commands.locale_str]
     __cog_settings__: Dict[str, Any]
     __cog_commands__: List[Command[Self, ..., Any]]
     __cog_app_commands__: List[Union[app_commands.Group, app_commands.Command[Self, ..., Any]]]
@@ -375,6 +375,17 @@ class Cog(metaclass=CogMeta):
         """
         return [c for c in self.__cog_commands__ if c.parent is None]
 
+    def get_app_commands(self) -> List[Union[app_commands.Command[Self, ..., Any], app_commands.Group]]:
+        r"""Returns the app commands that are defined inside this cog.
+
+        Returns
+        --------
+        List[Union[:class:`discord.app_commands.Command`, :class:`discord.app_commands.Group`]]
+            A :class:`list` of :class:`discord.app_commands.Command`\s and :class:`discord.app_commands.Group`\s that are
+            defined inside this cog, not including subcommands.
+        """
+        return [c for c in self.__cog_app_commands__ if c.parent is None]
+
     @property
     def qualified_name(self) -> str:
         """:class:`str`: Returns the cog's specified name, not the class name."""
@@ -404,6 +415,19 @@ class Cog(metaclass=CogMeta):
                 yield command
                 if isinstance(command, GroupMixin):
                     yield from command.walk_commands()
+
+    def walk_app_commands(self) -> Generator[Union[app_commands.Command[Self, ..., Any], app_commands.Group], None, None]:
+        """An iterator that recursively walks through this cog's app commands and subcommands.
+
+        Yields
+        ------
+        Union[:class:`discord.app_commands.Command`, :class:`discord.app_commands.Group`]
+            An app command or group from the cog.
+        """
+        for command in self.__cog_app_commands__:
+            yield command
+            if isinstance(command, app_commands.Group):
+                yield from command.walk_commands()
 
     @property
     def app_command(self) -> Optional[app_commands.Group]:
