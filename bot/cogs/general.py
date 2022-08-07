@@ -1,6 +1,6 @@
 from discord.ext import commands
 
-class General(commands.Cog):
+class Admin(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.is_first_ready = True
@@ -12,15 +12,5 @@ class General(commands.Cog):
             print(self.__class__.__name__, 'is ready')
             self.is_first_ready = False
 
-    @commands.hybrid_command(name='test')
-    async def test(self, ctx):
-        print('Test called')
-        await ctx.send('Hybrid command!')
-
-    @commands.command(name='hello')
-    async def hello(self, ctx):
-        print('Hello called')
-        await ctx.send('Hi!')
-
 async def setup(bot):
-    await bot.add_cog(General(bot))
+    await bot.add_cog(Admin(bot))
