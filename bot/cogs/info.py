@@ -7,7 +7,7 @@ from bot.assets.api import queries
 from bot.classes.bot import Kiddo
 from bot.classes.profile import Profile
 from bot.classes.paginator import Paginator  # type: ignore
-from bot.utils import get, errors
+from bot.utils import command_config as config, errors, utils  # type: ignore
 from bot.utils.queries import query_profile  # type: ignore
 
 crates = {
@@ -35,8 +35,8 @@ class Info(commands.Cog):
     async def on_ready(self):
         if self.is_first_ready:
             await self.bot.loading()
-            server = discord.utils.get(self.bot.guilds, id=475033206672850945)
-            async def get_crate(bot, c):
+            server = self.bot.get_guild(475033206672850945)
+            async def get_crate(c):
                 try:
                     return await server.fetch_emoji(crates[c])  # type: ignore
                 except Exception:
@@ -47,12 +47,12 @@ class Info(commands.Cog):
                     elif c == 'l': return 'Legendary crates'
                     else: return 'Mystery crates'
             self.bot.crates = {
-                'c': await get_crate(self.bot, 'c'),
-                'u': await get_crate(self.bot, 'u'),
-                'r': await get_crate(self.bot, 'r'),
-                'm': await get_crate(self.bot, 'm'),
-                'l': await get_crate(self.bot, 'l'),
-                'my': await get_crate(self.bot, 'my')
+                'c': await get_crate('c'),
+                'u': await get_crate('u'),
+                'r': await get_crate('r'),
+                'm': await get_crate('m'),
+                'l': await get_crate('l'),
+                'my': await get_crate('my')
             }
             print(self.__class__.__name__, 'is ready')
             self.is_first_ready = False
@@ -92,23 +92,24 @@ class Info(commands.Cog):
         pvpmin='pvp_min', pvpmax='pvp_max', lsmin='lovescore_min', lsmax='lovescore_max', fmin='favor_min', fmax='favor_max',
         sort='order_by'
     )
-    @app_commands.autocomplete(classes=get.class_autocomplete)
-    @app_commands.autocomplete(race=get.race_autocomplete)
+    @app_commands.autocomplete(classes=config.auto_class)
+    @app_commands.autocomplete(race=config.auto_race)
+    @app_commands.autocomplete(god=config.auto_god)
     @app_commands.command(name='profile')
     async def _profile_app(
         self, interaction: discord.Interaction, user: discord.User = None,  # type: ignore
-        name: str = None, lvmin: int = None, lvmax: int = None,  # type: ignore
+        name: str = None, lvmin: app_commands.Range[int, 1, 30] = None, lvmax: app_commands.Range[int, 1, 30] = None,  # type: ignore
         race: str = None, classes: str = None, emin: int = None, emax: int = None,  # type: ignore
-        ratkmin: float = None, ratkmax: float = None, rdefmin: float = None, rdefmax: float = None,  # type: ignore
-        pvpmin: int = None, pvpmax: int = None, spouse: discord.User = None,  # type: ignore
-        lsmin: int = None, lsmax: int = None, god: str = None, luck: float = None,  # type: ignore
-        fmin: int = None, fmax: int = None, guild: int = None,  # type: ignore
-        limit: int = 100, sort: str = 'xp.desc,money.desc', reverse: bool = False
+        ratkmin: app_commands.Range[float, 1] = None, ratkmax: app_commands.Range[float, 1] = None, rdefmin: app_commands.Range[float, 1] = None, rdefmax: app_commands.Range[float, 1] = None,  # type: ignore
+        pvpmin: app_commands.Range[int, 0] = None, pvpmax: app_commands.Range[int, 0] = None, spouse: discord.User = None,  # type: ignore
+        lsmin: app_commands.Range[int, 0] = None, lsmax: app_commands.Range[int, 0] = None, god: str = None, luck: app_commands.Range[float, 0, 2] = None,  # type: ignore
+        fmin: app_commands.Range[int, 0] = None, fmax: app_commands.Range[int, 0] = None, guild: int = None,  # type: ignore
+        limit: app_commands.Range[int, 1, 250] = 100, sort: str = 'xp.desc,money.desc', reverse: bool = False
     ):
         '''
         Get IdleRPG profile
         '''
-        if get.check_if_all_null(
+        if utils.check_if_all_null(
             name, lvmin, lvmax, race, classes, emin, emax, ratkmin, ratkmax, rdefmin, rdefmax,
             pvpmin, pvpmax, spouse, lsmin, lsmax, god, luck, fmin, fmax, guild
         ):

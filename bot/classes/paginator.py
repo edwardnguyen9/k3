@@ -3,10 +3,8 @@ import discord, asyncio, datetime
 from random import getrandbits
 
 from bot.utils.errors import NoEmbedPage
+from bot.utils.utils import pager  # type: ignore
 
-async def pager(entries, chunk: int):
-    for x in range(0, len(entries), chunk):
-        yield entries[x : x + chunk]
 
 class Paginator:
 
