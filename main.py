@@ -35,22 +35,6 @@ async def main():
             help_command=None
         ) as bot:
 
-            # def get_prefix(bot, msg):
-            #     if msg.guild:
-            #         try:
-            #             return custom_prefix[msg.guild.id]
-            #             return commands.when_mentioned_or(custom_prefix[msg.guild.id])(
-            #                 bot, msg
-            #             )
-            #         except KeyError:
-            #             return PREFIX
-            #             return commands.when_mentioned_or(PREFIX)(
-            #                 bot, msg
-            #             )
-            #     else:
-            #         return PREFIX
-            # bot.command_prefix = get_prefix
-
             await bot.start(os.getenv('TOKEN', ''))
 
 

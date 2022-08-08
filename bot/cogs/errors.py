@@ -3,21 +3,41 @@ from discord.ext import commands
 from discord import app_commands
 from humanize import precisedelta
 
-from bot.utils import errors  # type: ignore
+from bot.utils import errors
 
 class ErrorHandler(commands.Cog, name='Error Handler'):
     def __init__(self, bot):
         self.bot = bot
+        self.is_first_ready = True
+
+    @commands.Cog.listener()
+    async def on_ready(self):
+        if self.is_first_ready:
+            print(self.__class__.__name__, 'is ready')
+            self.is_first_ready = False
+
+    @commands.Cog.listener()
+    async def on_error(self, ctx, error):
+        if isinstance(error, errors.ApiIsDead):
+            status = await self.bot.redis.get('idle-api')
+            if error.status and int(status) != error.status:
+                await self.bot.redis.set('idle-api', ex=900)
+
+        elif isinstance(error, errors.KiddoException):
+            await self.send_error_message(error.context, str(error))
+
+        else:
+            try:
+                await self.bot.log_error(error)
+            except Exception:
+                print(ctx.guild.name if ctx.guild else 'DM', error, traceback.extract_stack())
 
     @commands.Cog.listener()
     async def on_command_error(self, ctx, error):
         if isinstance(error, commands.CommandNotFound):
             return
 
-        elif isinstance(error, (errors.CommandOnCooldown, errors.AppCommandOnCooldown)):
-            await self.send_error_message(ctx, 'The command will be available in {}.'.format(precisedelta(error.retry_after)))
-
-        elif isinstance(error, (errors.ApiIsDead, errors.AppApiIsDead)):
+        elif isinstance(error, errors.ApiIsDead):
             status = await self.bot.redis.get('idle-api')
             cd = error.ttl or 900
             if error.status and int(status) != error.status:
@@ -26,6 +46,9 @@ class ErrorHandler(commands.Cog, name='Error Handler'):
                 ctx,
                 f'The API is currently unavailable (Error Code: {status}). Please try again in {precisedelta(cd)}.'
             )
+
+        elif isinstance(error, errors.KiddoException):
+            await self.send_error_message(error.context, str(error))
         
         elif isinstance(error, commands.NotOwner):
             await self.send_error_message(ctx, 'You are not the boss of me.')

@@ -9,7 +9,7 @@ from pprint import pformat
 from dotenv import load_dotenv
 
 from bot.assets.api import QUERY_PREFIX
-from bot.utils.errors import ApiIsDead  # type: ignore
+from bot.utils.errors import ApiIsDead 
 
 load_dotenv()
 
@@ -133,7 +133,7 @@ class Kiddo(commands.Bot):
         for extension in self.initial_extensions:
             try:
                 await self.load_extension(f'bot.cogs.{extension}')
-                print(f'{extension.title()} loaded')
+                # print(f'{extension.title()} loaded')
             except Exception:
                 print(f'Error loading cog {extension}')
                 traceback.print_exc()
@@ -206,7 +206,7 @@ class Kiddo(commands.Bot):
                 if status // 100 == 5:
                     self.api_available = False
                     await self.change_presence(status=discord.Status.dnd, activity=discord.Game(f'\u203c API unavailable'))
-                    raise ApiIsDead
+                    raise ApiIsDead(ctx)
                 elif status == 429:
                     await asyncio.sleep(3.5)
                 else:
