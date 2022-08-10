@@ -99,7 +99,7 @@ class Kiddo(commands.Bot):
         if server is None: return
         channel = discord.utils.get(server.text_channels, name='k3-api-logs')
         if channel is None: return
-        author = ctx.author if isinstance(ctx, commands.Context) else ctx.user
+        author = None if ctx is None else ctx.author if isinstance(ctx, commands.Context) else ctx.user
         message = None if not ctx else 'Query called by {} in {}'.format(
             author.name, f'#{ctx.channel.name} ({ctx.channel.mention})' # type: ignore
         )
@@ -108,7 +108,7 @@ class Kiddo(commands.Bot):
                 content=message,
                 embed=discord.Embed(
                     title='Autofetch' if not ctx else ctx.command.qualified_name, # type: ignore
-                    description=f'```{query}```',
+                    description=f'```{query} ```',
                     timestamp=datetime.datetime.now(datetime.timezone.utc),
                     color=0xc77bed if status // 100 == 2 else 0xc91e1e
                 ).add_field(
@@ -117,7 +117,7 @@ class Kiddo(commands.Bot):
                     text=' | '.join([str(i) for i in [ctx.guild.name if ctx else None, '{}ms'.format(delay)] if i is not None]) # type: ignore
                 ),
                 file=discord.File(
-                    filename='{}.txt'.format(query[:query.index('?')]),
+                    filename='{}.txt'.format(query[:query.index('?')] if '?' in query else 'query'),
                     fp=BytesIO(pformat(res).encode())
                 ) if (ctx is not None and status // 100 == 2 and res is not None and len(res) > 0) else None  # type: ignore
             )
@@ -206,7 +206,7 @@ class Kiddo(commands.Bot):
         res, status = [], 0
         for i in range(tries):
             start_time = datetime.datetime.now()
-            if query.startswith(api.QUERY_PREFIX): query = query[len(api.QUERY_PREFIX):]
+            if len(query) > 0 and query.startswith(api.QUERY_PREFIX): query = query[len(api.QUERY_PREFIX):]
             async with self.session.get(
                 api.QUERY_PREFIX + query, headers=self.get_token()
             ) as r:
@@ -238,13 +238,13 @@ class Kiddo(commands.Bot):
                     break
         return (res, status)
 
-    async def get_equipped(self, uid, ctx=None):
+    async def get_equipped(self, uid, ctx=None, orgs=False):
         old_equipped = await self.pool.fetchval(postgres.queries['fetch_weapons'], uid) or []
         equipped = [i[0] for i in old_equipped]
         hands, dmg_lim, amr_lim = 0, 101, 101
         shield = False
         skipped = []
-        profile = []
+        profile = {}
         idmin = 0
         if len(equipped) > 0:
             (res, status) = await self.idle_query(api.queries['equip_old'].format(owner=uid, ids=','.join(equipped)), ctx)
@@ -252,10 +252,7 @@ class Kiddo(commands.Bot):
                 raise errors.TooManyRequests(ctx)
             equipped.clear()
             if len(res) > 0 and 'profile' in res[0]:
-                profile.append(res[0]['profile']['race'])
-                profile.append(utils.transmute_class(res[0]['profile']))
-                profile.append(res[0]['profile']['guild'])
-                profile.append([res[0]['profile']['atkmultiply'], res[0]['profile']['atkmultiply']])
+                profile = res[0]['profile']
             for i in res:
                 if 'inventory' in i and i['inventory']:
                     hands += 2 if i['hand'] == 'both' else 1
@@ -298,10 +295,7 @@ class Kiddo(commands.Bot):
                 await asyncio.sleep(3.5)
             else:
                 if len(profile) == 0 and 'profile' in res[0]:
-                    profile.append(res[0]['profile']['race'])
-                    profile.append(utils.transmute_class(res[0]['profile']))
-                    profile.append(res[0]['profile']['guild'])
-                    profile.append([res[0]['profile']['atkmultiply'], res[0]['profile']['atkmultiply']])
+                    profile = res[0]['profile']
                 for i in res:
                     if hands == 2: break
                     if 'inventory' in i and i['inventory']:
@@ -330,8 +324,40 @@ class Kiddo(commands.Bot):
                         skipped += [i['id'] for i in res if i['damage'] == res[-1]['damage']]
                     else: idmin = res[-1]['id']
                     await asyncio.sleep(3.5)
-        return equipped
-        # await self.pool.execute(postgres.queries['weapon_update'], )
+        if len(profile) == 0:
+            (res, status) = await self.idle_query(api.queries['profile'].format(userid=uid), ctx)
+            if status == 429:
+                raise errors.TooManyRequests(ctx)
+            if len(res) > 0 and 'profile' in res[0]:
+                profile = res[0]['profile']
+                
+        if len(profile) > 0:
+            log_p = [profile['race'], utils.transmute_class(profile), profile['guild'], [profile['atkmultiply'], profile['defmultiply']]]
+            log_w = [[str(i['id']), i['type'], str(int(i['damage'] + i['armor'])), i['name']] for i in equipped]
+            if not await self.pool.fetchval(
+                postgres.queries['existed'],
+                uid,
+            ):
+                await self.pool.execute(
+                    postgres.queries['new_weapons'],
+                    uid,
+                    *log_p,
+                    log_w,
+                    datetime.datetime.now(datetime.timezone.utc)
+                )
+            else:
+                await self.pool.execute(
+                    postgres.queries['update_weapons'],
+                    uid,
+                    *log_p,
+                    log_w,
+                    datetime.datetime.now(datetime.timezone.utc)
+                )
+        else: log_p, log_w = [], []
+        if orgs:
+            return profile, equipped
+        else:
+            return log_p, log_w
 
     def _get_prefix(self, bot, message):
         if not message.guild:

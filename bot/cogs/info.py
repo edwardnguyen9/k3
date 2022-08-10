@@ -1,13 +1,14 @@
-import discord, random, datetime, json
+import discord, random, datetime, json, asyncio
 from discord import app_commands
 from discord.ext import commands
 from typing import Union, Optional, Literal
-from humanize import intcomma
+from humanize import intcomma, precisedelta
 from io import BytesIO
 from pprint import pformat
 
 from bot.assets import api, postgres  # type: ignore
 from bot.classes.bot import Kiddo
+from bot.classes.profile import Profile
 from bot.classes.paginator import Paginator  # type: ignore
 from bot.utils import command_config as config, errors, utils, embeds, queries  # type: ignore
 
@@ -22,6 +23,9 @@ class Info(commands.Cog):
             ),
             app_commands.ContextMenu(
                 name='Equipped', callback=self._menu_equipped
+            ),
+            app_commands.ContextMenu(
+                name='XP', callback=self._menu_xp
             ),
         ]
         for i in self.ctx_menu:
@@ -624,6 +628,89 @@ class Info(commands.Cog):
         if end <= start: raise errors.InvalidInput(interaction, 'final_value', end)
         else: await self._get_raidstats(interaction, start, end)
 
+    @commands.command(
+        name='xp',
+        brief='Get required XP to next milestones',
+        description='Get required XP to next milestones',
+        usage='[user/XP value]',
+        help='''
+        > [user/XP value]: The user or the XP to get.
+        '''
+    )
+    async def _xp(self, ctx: commands.Context, target: Optional[Union[discord.User, int]]):
+        if isinstance(target, int) and target < 0: raise errors.InvalidInput(ctx, 'value', target)
+        await self._get_xp(ctx, target)
+
+    @app_commands.describe(
+        xp='The XP to calculate (override user filter)', user='The user to fetch'
+    )
+    @app_commands.command(name='xp')
+    async def _app_xp(self, interaction: discord.Interaction, xp: Optional[app_commands.Range[int, 0]] = None, user: Optional[discord.User] = None):
+        '''
+        Get required XP to next milestones
+        '''
+        if xp is not None:
+            await self._get_xp(interaction, xp)
+        else:
+            await self._get_xp(interaction, user)
+
+    @app_commands.checks.has_permissions(kick_members=True)
+    async def _menu_xp(self, interaction: discord.Interaction, user: discord.User):
+        await self._get_xp(interaction, user, True)
+
+    @commands.command(
+        name='missions',
+        aliases=['adventures', 'ac'],
+        brief='Get adventure information',
+        description='Get adventure information',
+        usage='[custom settings]',
+        help='''
+        > [custom settings] includes:
+        > • `user` - The user used to calculate the chance, default to the command user
+        > • `level` - The adventure level, will get all levels if not provided
+        > • `booster` - Whether luck booster is used (False by default)
+        > • `building` - The level of the adventure building (10 by default)
+        '''
+    )
+    async def _missions(self, ctx: commands.Context, flags: config.AdventureChance):
+        await self._get_missions(ctx, flags.user or ctx.author, flags.level, flags.booster, flags.building)
+
+    @app_commands.describe(
+        user='Get success chance for this user (default to the command user)',
+        level='Get detailed information for this adventure level',
+        booster='Whether luck booster is used', building='The level of the adventure building (10 by default)'
+    )
+    @app_commands.rename(
+        booster='time_booster', building='adventure_building',
+    )
+    @app_commands.command(name='adventures')
+    async def _app_missions(self, interaction: discord.Interaction,
+        user: Optional[discord.User] = None, level: Optional[app_commands.Range[int, 1, 30]] = None,
+        booster: bool = False, building: app_commands.Range[int, 0, 10] = 10
+    ):
+        '''
+        Get adventure information
+        '''
+        await self._get_missions(interaction, user or interaction.user, level, booster, building)
+
+    @commands.command(
+        name='query',
+        aliases=['q'],
+        brief='Send query',
+        description='Send a query to IdleRPG API',
+        usage='<query>',
+        help='''
+        > <query>: The query to send
+        '''
+    )
+    async def _query(self, ctx: commands.Context, *, query: str = ''):
+        await self._get_query(ctx, query)
+
+    @app_commands.describe(query='The query to send to IdleRPG API')
+    @app_commands.command(name='query')
+    async def _app_query(self, interaction: discord.Interaction, query: Optional[str] = ''):
+        await self._get_query(interaction, query or '')
+
     async def _get_profile(self, ctx: Union[commands.Context, discord.Interaction], user: Union[discord.Member, discord.User], ephemeral: bool = False):
         if isinstance(ctx, discord.Interaction):
             await ctx.response.defer(thinking=True, ephemeral=ephemeral)
@@ -636,7 +723,9 @@ class Info(commands.Cog):
         (res, status) = await self.bot.idle_query(api.queries['profile'].format(userid=user.id), ctx)
         if status == 429:
             raise errors.TooManyRequests(ctx)
-        elif not res or len(res) == 0:
+        elif res is None:
+            return await send_message.send('An error has occurred while trying to fetch data from the server.')
+        elif len(res) == 0:
             return await send_message.send('The provided user does not have a profile.')
         else:
             embed = embeds.profile(self.bot, res[0], weapons)
@@ -686,7 +775,9 @@ class Info(commands.Cog):
         (res, status) = await self.bot.idle_query(api.queries['item'].format(id=iid), ctx)
         if status == 429:
             raise errors.TooManyRequests(ctx)
-        elif not res or len(res) == 0:
+        elif res is None:
+            return await send_message.send('An error has occurred while trying to fetch data from the server.')
+        elif len(res) == 0:
             return await send_message.send('Cannot find the item with that ID.')
         else:
             embed = embeds.items(res)
@@ -704,7 +795,9 @@ class Info(commands.Cog):
         (res, status) = await self.bot.idle_query(api.queries['guild'].format(id=gid), ctx)
         if status == 429:
             raise errors.TooManyRequests(ctx)
-        elif not res or len(res) != 1:
+        elif res is None:
+            return await send_message.send('An error has occurred while trying to fetch data from the server.')
+        elif len(res) != 1:
             return await send_message.send('Cannot find the guild with that ID.')
         else:
             g = res[0]
@@ -735,7 +828,9 @@ class Info(commands.Cog):
         (res, status) = await self.bot.idle_query(api.queries['alliance'].format(id=aid), ctx)
         if status == 429:
             raise errors.TooManyRequests(ctx)
-        elif not res or len(res) == 0:
+        elif res is None:
+            return await send_message.send('An error has occurred while trying to fetch data from the server.')
+        elif len(res) == 0:
             return await send_message.send('Cannot find the guild with that ID.')
         elif len(res) == 1 and res[0]['id'] != res[0]['alliance']:
             (res, status) = await self.bot.idle_query(api.queries['alliance'].format(id=res[0]['alliance']), ctx)
@@ -766,7 +861,9 @@ class Info(commands.Cog):
         (res, status) = await self.bot.idle_query(api.queries['funds'].format(id=gid, crates=','.join(api.crates)), ctx)
         if status == 429:
             raise errors.TooManyRequests(ctx)
-        elif not res or len(res) == 0:
+        elif res is None:
+            return await send_message.send('An error has occurred while trying to fetch data from the server.')
+        elif len(res) == 0:
             return await send_message.send('Cannot find the guild with that ID.')
         else:
             money, crate_count, guild = 0, [0, 0, 0, 0, 0, 0], {}
@@ -796,7 +893,7 @@ class Info(commands.Cog):
             ).set_footer(text='Does not take into account: loot items, weapons, or alts', icon_url=author.display_avatar.url)
             await send_message.send(embed=embed)
 
-    async def _get_query(self, ctx: Union[commands.Context, discord.Interaction], query):
+    async def _get_query(self, ctx: Union[commands.Context, discord.Interaction], query: str):
         if isinstance(ctx, discord.Interaction):
             await ctx.response.defer(thinking=True)
             send_message = ctx.followup
@@ -804,15 +901,15 @@ class Info(commands.Cog):
         else:
             send_message = ctx
             author = ctx.author
-        if query.startswith(api.QUERY_PREFIX): query = query[len(api.QUERY_PREFIX):]
+        if len(query) > 0 and query.startswith(api.QUERY_PREFIX): query = query[len(api.QUERY_PREFIX):]
         (res, status) = await self.bot.idle_query(query, ctx)
         if status == 429:
             raise errors.TooManyRequests(ctx)
-        elif status != 200 or not res:
-            return await send_message.send('An error has occurred while trying to fetch data from the server.')
+        elif status != 200 or res is None:
+            return await send_message.send('An error has occurred while trying to fetch data from the server (Code {}).'.format(status))
         else:
-            endpoint = query[:query.index('?')]
-            get_embed = 'select=' not in query or 'select=*' in query
+            endpoint = query[:query.index('?')] if len(query) > 0 and '?' in query else 'query'
+            get_embed = len(query) > 0 and ('select=' not in query or 'select=*' in query) and '?' in query
             await send_message.send(
                 '{0} entries found.'.format((len(res))),
                 file=discord.File(
@@ -821,18 +918,79 @@ class Info(commands.Cog):
                 )
             )
             if get_embed and len(res):
+                pages = []
                 if endpoint == 'profile':
-                    pass
+                    for i in res:
+                        weapons = await self.bot.pool.fetchval(postgres.queries['fetch_weapons'], i['user']) or []
+                        embed = embeds.profile(self.bot, i, weapons)
+                        embed.set_footer(text=(embed.footer.text or author.name), icon_url=author.display_avatar.url)
+                        pages.append(embed)
+                    if len(pages) == 1:
+                        await send_message.send(embed=pages[0])
+                    else:
+                        pag = Paginator(extras=pages, footer='{0} entries found.'.format(len(res)))
+                        return await pag.paginate(ctx)
                 elif endpoint == 'allitems':
-                    pass
+                    entries = utils.pager(res, 5)
+                    for i in entries:
+                        embed = embeds.items(i)
+                        embed.set_footer(text=(embed.footer.text or author.name), icon_url=author.display_avatar.url)
+                        pages.append(embed)
+                    if len(pages) == 1:
+                        await send_message.send(embed=pages[0])
+                    else:
+                        pag = Paginator(extras=pages, footer='{0} entries found.'.format(len(res)))
+                        return await pag.paginate(ctx)
                 elif endpoint == 'guild':
-                    pass
+                    update_guild = {}
+                    for i in res:
+                        if str(i['id']) not in update_guild:
+                            self.bot.idle_guilds[str(i['id'])] = [i['name'], i['leader'], i['alliance']['id']]
+                            update_guild[str(i['id'])] = json.dumps([i['name'], i['leader'], i['alliance']['id']])
+                        if i['id'] != i['alliance']['id'] and str(i['alliance']['id']) not in update_guild:
+                            self.bot.idle_guilds[str(i['alliance']['id'])] = [i['alliance']['name'], i['alliance']['leader'], i['alliance']['id']]
+                            update_guild[str(i['alliance']['id'])] = json.dumps([i['alliance']['name'], i['alliance']['leader'], i['alliance']['id']])
+                        if len(update_guild) > 0: await self.bot.redis.hset('guilds', mapping=update_guild)
+                        embed = embeds.guild(res[0])
+                        embed.set_footer(text=(embed.footer.text or author.name), icon_url=author.display_avatar.url)
+                        pages.append(embed)
+                    if len(pages) == 1:
+                        await send_message.send(embed=pages[0])
+                    else:
+                        pag = Paginator(extras=pages, footer='{0} entries found.'.format(len(res)))
+                        return await pag.paginate(ctx)
                 elif endpoint == 'pets':
-                    pass
+                    for i in res:
+                        embed = embeds.pet(i)
+                        embed.set_footer(text=(embed.footer.text or author.name), icon_url=author.display_avatar.url)
+                        pages.append(embed)
+                    if len(pages) == 1:
+                        await send_message.send(embed=pages[0])
+                    else:
+                        pag = Paginator(extras=pages, footer='{0} entries found.'.format(len(res)))
+                        return await pag.paginate(ctx)
                 elif endpoint == 'children':
-                    pass
+                    entries = utils.pager(res, 6)
+                    for i in entries:
+                        embed = embeds.children(i)
+                        embed.set_footer(text=(embed.footer.text or author.name), icon_url=author.display_avatar.url)
+                        pages.append(embed)
+                    if len(pages) == 1:
+                        await send_message.send(embed=pages[0])
+                    else:
+                        pag = Paginator(extras=pages, footer='{0} entries found.'.format(len(res)))
+                        return await pag.paginate(ctx)
                 elif endpoint == 'loot':
-                    pass
+                    entries = utils.pager(res, 6)
+                    for i in entries:
+                        embed = embeds.loot(i)
+                        embed.set_footer(text=(embed.footer.text or author.name), icon_url=author.display_avatar.url)
+                        pages.append(embed)
+                    if len(pages) == 1:
+                        await send_message.send(embed=pages[0])
+                    else:
+                        pag = Paginator(extras=pages, footer='{0} entries found.'.format(len(res)))
+                        return await pag.paginate(ctx)
 
     async def _get_raidstats(self, ctx: Union[commands.Context, discord.Interaction], start: float, end: float):
         if isinstance(ctx, discord.Interaction): await ctx.response.defer(thinking=True)
@@ -853,6 +1011,219 @@ class Info(commands.Cog):
         )
         return await p.paginate(ctx)
 
+    async def _get_xp(self, ctx: Union[commands.Context, discord.Interaction], target: Optional[Union[discord.User, int]], ephemeral: bool = False):
+        if isinstance(ctx, discord.Interaction):
+            await ctx.response.defer(thinking=True, ephemeral=ephemeral)
+            send_message = ctx.followup
+            user = ctx.user
+        else:
+            send_message = ctx
+            user = ctx.author
+        if target is None:
+            level_table = []
+            for i in range(0, len(api.levels)):
+                level_table += [
+                    'Level {}'.format((i+1)).ljust(12) + ('Beginner' if i == 0 else intcomma(api.levels[i])).rjust(12)
+                ]
+            p = Paginator(
+                title='Level table',
+                entries=level_table,
+                length=10,
+                codeblock=True,
+                color=random.getrandbits(24)
+            )
+            return await p.paginate(ctx)
+        elif isinstance(target, (discord.Member, discord.User)):
+            user = target
+            (res, status) = await self.bot.idle_query(api.queries['xp'].format(id=user.id), ctx)
+            if status == 429:
+                raise errors.TooManyRequests(ctx)
+            elif status != 200 or res is None:
+                return await send_message.send('An error has occurred while trying to fetch data from the server.')
+            elif len(res) == 0:
+                return await send_message.send('{} does not have a profile.'.format(user.mention))
+            else:
+                value = res[0]['xp']
+        else:
+            value = target
+        lvl = utils.getlevel(value)
+        embed = discord.Embed(
+            title=f'XP statistics (Lv. {lvl})',
+            color=random.getrandbits(24),
+            timestamp=datetime.datetime.now(datetime.timezone.utc)
+        ).set_footer(
+            text=user.name, icon_url=user.display_avatar.url
+        )
+        if lvl < 25:
+            embed.add_field(
+                name='To {}'.format('next evolution' if lvl > 11 else 'second class'),
+                value='{} XP\n{} lv1 adv (375 XP/adv)\n{} days (48 a1s/day)'.format(
+                    intcomma(a := utils.getnextevol(value)), intcomma(b:= a / 375, 2), intcomma(b / 48, 2)
+                )
+            )
+        if lvl < 29:
+            embed.insert_field_at(0,
+                name='To next level',
+                value='{} XP\n{} lv1 adv (375 XP/adv)\n{} days (48 a1s/day)'.format(
+                    intcomma(a := utils.getnextlevel(value)), intcomma(b:= a / 375, 2), intcomma(b / 48, 2)
+                )
+            )
+        if lvl < 30:
+            embed.add_field(
+                name='To level 30',
+                value='{} XP\n{} lv1 adv (375 XP/adv)\n{} days (48 a1s/day)'.format(
+                    intcomma(a := utils.getto30(value)), intcomma(b:= a / 375, 2), intcomma(b / 48, 2)
+                )
+            )
+        else:
+            embed.description = 'Already at max level.'
+        await send_message.send(embed=embed)
+
+    async def _get_missions(self, ctx: Union[commands.Context, discord.Interaction], user: Union[discord.Member, discord.User], level: Optional[int], booster: bool, building: int):
+        if isinstance(ctx, discord.Interaction):
+            await ctx.response.defer(thinking=True)
+            send_message = ctx.followup
+            author = ctx.user
+            bot = ctx.client
+        else:
+            send_message = ctx
+            author = ctx.author
+            bot = ctx.bot
+        try:
+            profile, equipped = await self.bot.get_equipped(user.id, ctx, True)
+        except errors.ApiIsDead:
+            profile, equipped = {}, []
+        if profile is not None:
+            p = Profile(data=profile, weapons=equipped)
+            def calcchance(lvl):
+                chances = utils.adv_success(p, lvl, booster, building)
+                if chances is None: return None
+                chances.sort()
+                chance = 0
+                for c in chances:
+                    if c >= 100:
+                        chance += 1
+                    elif c >= 0:
+                        chance += (c+1)/101
+                return [chances, round(100 * chance / len(chances), 2)]
+            if level:
+                chance = calcchance(level)
+                time = datetime.timedelta(hours=level * (1 - building / 100))
+                if chance is not None:
+                    descriptions = '\n'.join([
+                        ', '.join(map(lambda x: f'{x}', chance[0][i:i+5])) for i in range(0,len(chance[0]), 5)
+                    ])
+                    embed = discord.Embed(
+                        title='Adventure {} - {}'.format(level, api.adventures[level - 1]),
+                        description=(
+                            f'For the adventure to succeed, a random number between `[0, 100]` '
+                            f'picked by the bot has to be less than or equal to one of these numbers:'
+                            f'```\n{descriptions}\n```'
+                            f'The chance of that happening is: {chance[1]}%'
+                        ),
+                        color=random.getrandbits(24),
+                        timestamp=datetime.datetime.now(datetime.timezone.utc)
+                    ).set_footer(
+                        text=user.name, icon_url=author.display_avatar.url
+                    ).add_field(
+                        name='Duration', value='\n'.join([
+                            'Regular player: *{}* (*{}* with time booster)'.format(precisedelta(time, suppress=['days']), precisedelta(time * 0.5, suppress=['days'])),
+                            'Silver donator: *{}* (*{}* with time booster)'.format(precisedelta(time * 0.95, suppress=['days']), precisedelta(time * 0.5 * 0.95, suppress=['days'])),
+                            'Gold donator: *{}* (*{}* with time booster)'.format(precisedelta(time * 0.9, suppress=['days']), precisedelta(time * 0.5 * 0.9, suppress=['days'])),
+                            'Emerald donator: *{}* (*{}* with time booster)'.format(precisedelta(time * 0.75, suppress=['days']), precisedelta(time * 0.5 * 0.75, suppress=['days'])),
+                        ]),
+                    )
+                    return await send_message.send(embed=embed)
+                else:
+                    embed = discord.Embed(
+                        title='Adventure {} - {}'.format(level, api.adventures[level - 1]),
+                        description='The bot might crash if you attempt to finish this adventure while your luck is 0.0',
+                        color=random.getrandbits(24),
+                        timestamp=datetime.datetime.now(datetime.timezone.utc)
+                    ).set_footer(
+                        text=user.name, icon_url=author.display_avatar.url
+                    ).add_field(
+                        name='Duration', value='\n'.join([
+                            'Regular player: *{}* (*{}* with time booster)'.format(precisedelta(time, suppress=['days']), precisedelta(time * 0.5, suppress=['days'])),
+                            'Silver donator: *{}* (*{}* with time booster)'.format(precisedelta(time * 0.95, suppress=['days']), precisedelta(time * 0.5 * 0.95, suppress=['days'])),
+                            'Gold donator: *{}* (*{}* with time booster)'.format(precisedelta(time * 0.9, suppress=['days']), precisedelta(time * 0.5 * 0.9, suppress=['days'])),
+                            'Emerald donator: *{}* (*{}* with time booster)'.format(precisedelta(time * 0.75, suppress=['days']), precisedelta(time * 0.5 * 0.75, suppress=['days'])),
+                        ]),
+                    )
+                    return await send_message.send(embed=embed)
+            else:
+                all_adventures = []
+                for i in range(len(api.adventures)):
+                    c = calcchance(i+1)
+                    if c is not None: all_adventures += [
+                        '\n'.join([
+                            '**Adventure {}** - {}'.format(i+1, api.adventures[i]),
+                            'Duration: *{}*'.format(precisedelta(datetime.timedelta(hours=(i+1) * (1 - building / 100)), suppress=['days'])),
+                            'Success range: *{}% - {}%*'.format(min(c[0]), max(c[0])),
+                            'Success chance: {}%'.format(c[1]),
+                            ''
+                        ])
+                    ]
+                async def customnav(ctx):
+                    def valid(msg):
+                        if msg.guild and msg.channel.id == ctx.channel.id and msg.author.id == author.id and msg.content.isdecimal():
+                            pg = int(msg.content)
+                            return pg >= 1 and pg <= 30
+                        return False
+                    prompt = await ctx.channel.send('Select a mission level')
+                    try:
+                        jumpto = await bot.wait_for('message', check=valid, timeout=15)
+                    except asyncio.TimeoutError:
+                        await prompt.delete()
+                        msg = await ctx.channel.send('You did not enter a valid level.')
+                        await msg.delete(delay=10)
+                        return None
+                    await prompt.delete()
+                    pnum = (int(jumpto.content) - 1) // 5
+                    await jumpto.delete()
+                    return pnum
+                pag = Paginator(
+                    title='{}\'s success chance'.format(user.name),
+                    entries=all_adventures,
+                    length=5,
+                    color=random.getrandbits(24),
+                    customnav=customnav
+                )
+                await pag.paginate(ctx)
+        else:
+            all_adventures = []
+            for i in range(len(api.adventures)):
+                all_adventures += ['\n'.join([
+                    '**Adventure {}** - {}'.format(i+1, api.adventures[i]),
+                    'Duration: *{}*'.format(precisedelta(datetime.timedelta(hours=(i+1) * (1 - building / 100)), suppress=['days'])),
+                    '',
+                ])]
+            async def customnav(ctx):
+                def valid(msg):
+                    if msg.guild and msg.channel.id == ctx.channel.id and msg.author.id == author.id and msg.content.isdecimal():
+                        pg = int(msg.content)
+                        return pg >= 1 and pg <= 30
+                    return False
+                prompt = await ctx.channel.send('Select a mission level')
+                try:
+                    jumpto = await bot.wait_for('message', check=valid, timeout=15)
+                except asyncio.TimeoutError:
+                    await prompt.delete()
+                    msg = await ctx.channel.send('You did not enter a valid level.')
+                    await msg.delete(delay=10)
+                    return None
+                await prompt.delete()
+                pnum = (int(jumpto.content) - 1) // 5
+                await jumpto.delete()
+                return pnum
+            pag = Paginator(
+                title='{}\'s success chance'.format(user.name),
+                entries=all_adventures,
+                length=5,
+                color=random.getrandbits(24),
+                customnav=customnav
+            )
+            await pag.paginate(ctx)
 
 async def setup(bot):
     await bot.add_cog(Info(bot))

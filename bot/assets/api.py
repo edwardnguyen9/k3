@@ -7,10 +7,11 @@ crates = ['crates_common', 'crates_uncommon', 'crates_rare', 'crates_magic', 'cr
 queries = {
     # Profile
     'profile':      'profile?user=eq.{userid}',
+    'xp':           'profile?select=xp&user=eq.{id}',
     # Equipped
-    'equip_old':    'allitems?select=*,inventory(equipped),profile(race,class,atkmultiply,defmultiply,guild)&inventory.equipped=is.true&owner=eq.{owner}&id=in.({ids})',
-    'equipped':     'allitems?select=*,inventory(equipped),profile(class,atkmultiply,defmultiply,race,guild)d&owner=eq.{owner}&inventory.equipped=is.true&id=not.in.({ids})&damage=lte.{damage}&armor=lte.{armor}&hand=in.({hands})&order=armor.desc,damage.desc',
-    'scan_stats':   'allitems?select=*,inventory(equipped),profile(class,atkmultiply,defmultiply,race,guild)d&owner=eq.{owner}&inventory.equipped=is.true&hand=in.({hands})&id=gt.{idmin}&id=not.in.({ids})&{stats}&order=id',
+    'equip_old':    'allitems?select=*,inventory(equipped),profile(user,race,class,atkmultiply,defmultiply,guild,luck,xp)&owner=eq.{owner}&inventory.equipped=is.true&id=in.({ids})',
+    'equipped':     'allitems?select=*,inventory(equipped),profile(user,race,class,atkmultiply,defmultiply,guild,luck,xp)&owner=eq.{owner}&inventory.equipped=is.true&hand=in.({hands})&id=not.in.({ids})&damage=lte.{damage}&armor=lte.{armor}&hand=in.({hands})&order=armor.desc,damage.desc',
+    'scan_stats':   'allitems?select=*,inventory(equipped),profile(user,race,class,atkmultiply,defmultiply,guild,luck,xp)&owner=eq.{owner}&inventory.equipped=is.true&hand=in.({hands})&id=not.in.({ids})&id=gt.{idmin}&{stats}&order=id',
     # Item
     'item':         'allitems?id=eq.{id}&select=*,market(price),inventory(equipped)',
     # Guild

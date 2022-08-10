@@ -1,8 +1,16 @@
 import discord
+from discord.ext import commands
+from typing import Optional
 
 from bot.assets import api
 
 # Profile
+
+class AdventureChance(commands.FlagConverter):
+    user: Optional[discord.User] = None
+    level: Optional[int] = None
+    booster: bool = False
+    building: int = 10
 
 async def auto_class(interaction: discord.Interaction, current: str) -> list[discord.app_commands.Choice[str]]:  # type: ignore
     classes = {

@@ -1,6 +1,8 @@
 import discord, math
+from typing import Union
 
 from bot.assets import api
+from bot.classes.profile import Profile
 
 def pager(entries, chunk: int, similar_chunk: bool = False):
     if similar_chunk:
@@ -37,6 +39,19 @@ def getlevel(xp: int):
             return level
     return level
 
+def getnextlevel(xp: int):
+    """Returns user's XP until next level (int)"""
+    level = 0
+    for i in api.levels:
+        if xp >= i:
+            level += 1
+        else:
+            break
+    if level == 30:
+        return None
+    else:
+        return api.levels[level] - xp
+
 def getnextevol(xp: int):
     """Returns user's XP until next milestone (int)"""
     level = 0
@@ -52,11 +67,16 @@ def getnextevol(xp: int):
     else:
         return api.levels[(level // 5 + 1) * 5 - 1] - xp
 
-def get_class_bonus(c: str, data):
-    classes = [api.classes[i] for i in data['class'] if i in api.classes]
+def getto30(xp: int):
+    return api.levels[-1] - xp if api.levels[-1] > xp else 0
+
+def get_class_bonus(check: str, data: Union[dict, list]):
+    bonus = 0
+    c = ['wrr', 'prg'] if check == 'amr' else ['mge', 'prg'] if check == 'dmg' else [check]
+    classes = [api.classes[i] for i in data['class'] if i in api.classes] if isinstance(data, dict) else data
     for i in classes:
-        if c == i[0]: return int(i[1])
-    return 0
+        if i[0] in c: bonus += int(i[1])
+    return bonus
 
 def get_race_bonus(r: str):
     i = api.races.index(r)
@@ -65,8 +85,30 @@ def get_race_bonus(r: str):
 def get_weapon_bonus(weapons, classes):
     bonus = 0
     for i in weapons:
-        if i[1] in api.weapon_bonus and len(api.weapon_bonus[i[1]][0].intersection([i[0] for i in classes])) > 0: bonus += api.weapon_bonus[i[1]][1]
+        if isinstance(i, dict):
+            if (
+                i['type'] in api.weapon_bonus
+                and len(api.weapon_bonus[i['type']][0].intersection([j[0] for j in classes])) > 0
+            ):
+                bonus += api.weapon_bonus[i['type']][1]
+            else:
+                continue
+        else:
+            if (
+                i[1] in api.weapon_bonus
+                and len(api.weapon_bonus[i[1]][0].intersection([j[0] for j in classes])) > 0
+            ):
+                bonus += api.weapon_bonus[i[1]][1]
     return bonus
 
 def transmute_class(data):
     return [api.classes[i] for i in data['class'] if i in api.classes]
+
+def adv_success(profile, level, booster, building):
+    a, d, _, _ = profile.fighter_data()
+    const = a + d + 75 + building
+    chances = []
+    for i in range(7): chances += [const - (i + 1) * level - 0.5 * getlevel(profile.xp), const - (i + 1) * level + getlevel(profile.xp)]
+    chances.sort()
+    if chances[0] < 0 and profile.luck == 0: return None
+    else: return [(round(c * profile.luck if c >= 0 else c / profile.luck) + 25 * booster) for c in chances]
