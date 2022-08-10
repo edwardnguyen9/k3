@@ -2,6 +2,8 @@ import discord
 
 from bot.assets import api
 
+# Profile
+
 async def auto_class(interaction: discord.Interaction, current: str) -> list[discord.app_commands.Choice[str]]:  # type: ignore
     classes = {
         'Warrior': 'wrr', 'Mage': 'mge', 'Paragon': 'prg', 'Raider': 'rdr', 'Ranger': 'rng', 'Ritualist': 'rtl', 'Thief': 'thf'
@@ -18,5 +20,17 @@ async def auto_race(interaction: discord.Interaction, current: str) -> list[disc
 async def auto_god(interaction: discord.Interaction, current: str) -> list[discord.app_commands.Choice[str]]:  # type: ignore
     return [
         discord.app_commands.Choice(name=i, value=i) for i in api.gods if current.lower() in i.lower()
+    ]
+
+# Item
+
+async def auto_type(interaction: discord.Interaction, current: str) -> list[discord.app_commands.Choice[str]]:  # type: ignore
+    return [
+        discord.app_commands.Choice(name=i, value=i) for i in api.weapontypes if current.lower() in i.lower()
+    ]
+
+async def auto_hand(interaction: discord.Interaction, current: str) -> list[discord.app_commands.Choice[str]]:  # type: ignore
+    return [
+        discord.app_commands.Choice(name=i, value=i) for i in api.weaponhands if current.lower() in i.lower()
     ]
 

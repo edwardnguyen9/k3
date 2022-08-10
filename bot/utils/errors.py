@@ -1,6 +1,8 @@
+import discord
+from discord.ext import commands
 from humanize import precisedelta
 
-class KiddoException(Exception):
+class KiddoException(commands.CommandInvokeError, discord.app_commands.CommandInvokeError):
     """ Main Kiddo exception class """
     def __init__(self, ctx):
         self.context = ctx

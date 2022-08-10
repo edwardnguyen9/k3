@@ -2,41 +2,10 @@ import datetime, discord
 
 from humanize import intcomma
 
-from bot.assets import api
+from bot.assets import api, postgres  # type: ignore
+from bot.utils import utils  # type: ignore
 
 MAX_RAID_BUILDING = [2807, 8244, 13992, 6055, 17555, 3960, 20314, 15356, 19599, 20120, 20809, 25859]
-
-def embedcolor(colours: dict):
-    """Returns color from (r,g,b) dict"""
-    r = colours['red']
-    g = colours['green']
-    b = colours['blue']
-    return discord.Color.from_rgb(r, g, b)
-
-def getlevel(xp: int):
-    """Returns user's level (int)"""
-    level = 0
-    for i in api.levels:
-        if xp >= i:
-            level += 1
-        else:
-            return level
-    return level
-
-def getnextevol(xp: int):
-    """Returns user's XP until next milestone (int)"""
-    level = 0
-    for i in api.levels:
-        if xp >= i:
-            level += 1
-        else:
-            break
-    if level < 12:
-        return api.levels[11] - xp
-    elif level == 30:
-        return None
-    else:
-        return api.levels[(level // 5 + 1) * 5 - 1] - xp
 
 class Profile:
     def __init__(self, data):
@@ -52,12 +21,11 @@ class Profile:
     async def update_profile(self, bot):
         now = datetime.datetime.now(datetime.timezone.utc)
         if not await bot.pool.fetchval(
-            'SELECT EXISTS(SELECT 1 FROM profile3 WHERE "user"=$1);',
+            postgres.queries['existed'],
             self.user,
         ):
             await bot.pool.execute(
-                'INSERT INTO profile3 ("user", race, classes, guild, raidstats, dt)'
-                ' VALUES ($1, $2, $3, $4, $5, $6);',
+                postgres.queries['profile_new'],
                 self.user,
                 self.race,
                 self.classes,
@@ -67,8 +35,7 @@ class Profile:
             )
         else:
             await bot.pool.execute(
-                'UPDATE profile3 SET race=$2, classes=$3, guild=$4, raidstats=$5, dt=$6'
-                ' WHERE "user"=$1;',
+                postgres.queries['profile_update'],
                 self.user,
                 self.race,
                 self.classes,
@@ -80,16 +47,16 @@ class Profile:
     @staticmethod
     async def update_adventures(bot, data):
         if not await bot.pool.fetchval(
-            'SELECT EXISTS(SELECT 1 FROM profile3 WHERE "user"=$1);',
+            postgres.queries['existed'],
             data[0],
         ):
             await bot.pool.execute(
-                'INSERT INTO profile3 ("user", xp, adv, at) VALUES ($1, $2, $3, $4);',
+                postgres.queries['adv_new'],
                 *data,
             )
         else:
             await bot.pool.execute(
-                'UPDATE profile3 SET xp=$2, adv=$3, at=$4 WHERE "user"=$1;'
+                postgres.queries['adv_update'],
                 *data,
             )
 
@@ -97,49 +64,45 @@ class Profile:
     async def update_weapons(bot, user, data):
         now = datetime.datetime.now(datetime.timezone.utc)
         if not await bot.pool.fetchval(
-            'SELECT EXISTS(SELECT 1 FROM profile3 WHERE "user"=$1);',
+            postgres.queries['existed'],
             user[0],
         ):
             await bot.pool.execute(
-                'INSERT INTO profile3 ("user", raidstats, weapon, wt)'
-                ' VALUES ($1, $2, $3, $4);',
+                postgres.queries['weapon_new'],
                 *user,
                 data,
                 now
             )
         else:
             await bot.pool.execute(
-                'UPDATE profile3 SET raidstats=$2, weapon=$3, wt=$4'
-                ' WHERE "user"=$1;',
+                postgres.queries['weapon_updated'],
                 *user,
                 data,
                 now
             )
     
     @staticmethod
-    def profile_embed(bot, p):
+    async def get_stats(bot, user):
+        old_equipped = await bot.pool.fetchval(postgres.queries['fetch_weapons'], user.id) or []
+
+    @staticmethod
+    def profile_embed(bot, p, weapons: list = []):
         embed = discord.Embed(
             title=discord.utils.escape_markdown(p['name']),
-            color=embedcolor(p['colour']),
+            color=utils.embedcolor(p['colour']),
             timestamp=datetime.datetime.now(datetime.timezone.utc)
         )
         if not p['background'] == '0':
             embed.set_thumbnail(url=p['background'])
         
         # General field
-        classes = [api.classes[i] for i in p['class'] if i in api.classes]
-        def classbns(pclass):
-            for i in classes:
-                if pclass == i[0]: return int(i[1])
-            return 0
-
-        ranger = classbns('rng')
-        warrior = classbns('wrr')
-        mage = classbns('mge')
-        paragon = classbns('prg')
-        thief = classbns('thf')
-        ritualist = classbns('rtl')
-        raider = classbns('rdr')
+        ranger = utils.get_class_bonus('rng', p)
+        warrior = utils.get_class_bonus('wrr', p)
+        mage = utils.get_class_bonus('mge', p)
+        paragon = utils.get_class_bonus('prg', p)
+        thief = utils.get_class_bonus('thf', p)
+        ritualist = utils.get_class_bonus('rtl', p)
+        raider = utils.get_class_bonus('rdr', p)
         
         boosted = []
         if (paragon + mage + warrior):
@@ -158,6 +121,7 @@ class Profile:
         if ranger:
             boosted.append(f'Pet Lv.{ranger}')
         if len(boosted) == 0: boosted.append('None')
+
         field_general = [
             '**User:** <@{}>'.format(p['user']),
             '**Race:** {}'.format(p['race']),
@@ -169,17 +133,20 @@ class Profile:
 
         # Stats field
         rate = 0 if (p['deaths'] + p['completed']) == 0 else round(100.0 * p['deaths'] / (p['deaths'] + p['completed']), 2)
-        field_lvl = getlevel(p['xp'])
-        field_xptonext = getnextevol(p['xp'])
+        field_lvl = utils.getlevel(p['xp'])
+        field_xptonext = utils.getnextevol(p['xp'])
         field_stats = []
-        # if cache: field_stats.append('**ATK:** {} - **DEF:** {}'.format(int(cache[0]), int(cache[1])))
+        if len(weapons):
+            (dmg, amr) = utils.get_race_bonus(p['race'])
+            dmg += sum([int(i[2]) for i in weapons if i[1] != 'Shield']) + utils.get_weapon_bonus(weapons, [api.classes[i] for i in p['class'] if i in api.classes]) + paragon + mage
+            amr += sum([int(i[2]) for i in weapons if i[1] == 'Shield']) + paragon + warrior
+            field_stats.append('**ATK:** {} - **DEF:** {}'.format(dmg, amr))
         raid_bonus = 0 if p['guild'] not in MAX_RAID_BUILDING else 1
         field_stats.append('**ATK/DEF multiplier:** {}/{}'.format(round(p['atkmultiply'] + raider + raid_bonus, 1), round(p['defmultiply'] + raider + raid_bonus, 1)))
         field_stats.append('**Death rate:** {}/{} ({}%)'.format(intcomma(p['deaths']), intcomma(p['deaths'] + p['completed']), rate))
         field_stats.append('**PvP wins:** {}'.format(intcomma(p['pvpwins'])))
         field_stats.append('**XP:** {0} (Lvl. {1})'.format(intcomma(p['xp']), field_lvl))
         if field_xptonext is not None: field_stats.append('**To {}:** {} XP'.format('next evolution' if field_lvl > 11 else 'second class', intcomma(field_xptonext)))
-        
 
         # Inventory field
         field_inventory = []

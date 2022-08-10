@@ -8,8 +8,8 @@ from io import BytesIO
 from pprint import pformat
 from dotenv import load_dotenv
 
-from bot.assets.api import QUERY_PREFIX
-from bot.utils.errors import ApiIsDead 
+from bot.assets import api, postgres  # type: ignore
+from bot.utils import errors, utils  # type: ignore
 
 load_dotenv()
 
@@ -50,6 +50,22 @@ class Kiddo(commands.Bot):
         self.idle_guilds = {}
         self.api_available = True
         self.crates = {}
+        self.tree.on_error = self.on_error
+
+    async def on_error(self, interaction, error):
+        if isinstance(error, errors.ApiIsDead):
+            status = await self.redis.get('idle-api') or 0
+            if error.status and int(status) != error.status:
+                await self.redis.set('idle-api', status, ex=900)
+
+        elif isinstance(error, errors.KiddoException):
+            await interaction.response.send_message(str(error), ephemeral=True)
+            
+        else:
+            try:
+                await self.log_error(error)
+            except Exception:
+                print(interaction.guild.name if interaction.guild else 'DM', error, traceback.extract_stack())
 
     async def loading(self):
         while not self.loaded:
@@ -186,14 +202,13 @@ class Kiddo(commands.Bot):
     def get_token(self):
         return next(self.headers)
 
-    async def idle_query(self, query, ctx = None):
-        res, status = None, 0
-        for _ in range(3):
+    async def idle_query(self, query, ctx = None, tries: int = 3):
+        res, status = [], 0
+        for i in range(tries):
             start_time = datetime.datetime.now()
-            if query.startswith(QUERY_PREFIX): query = query[len(QUERY_PREFIX):]
-            q, h = QUERY_PREFIX + query, self.get_token()
+            if query.startswith(api.QUERY_PREFIX): query = query[len(api.QUERY_PREFIX):]
             async with self.session.get(
-                q, headers=h
+                api.QUERY_PREFIX + query, headers=self.get_token()
             ) as r:
                 end_time = datetime.datetime.now()
                 delay = round((end_time - start_time)/datetime.timedelta(microseconds=1000))
@@ -201,13 +216,13 @@ class Kiddo(commands.Bot):
                 try:
                     res = await r.json()
                 except Exception:
-                    res = None
+                    res = []
                 await self.log_api_call(ctx, query, status, delay, res)
                 if status // 100 == 5:
                     self.api_available = False
                     await self.change_presence(status=discord.Status.dnd, activity=discord.Game(f'\u203c API unavailable'))
-                    raise ApiIsDead(ctx)
-                elif status == 429:
+                    raise errors.ApiIsDead(ctx)
+                elif status == 429 and i < 2:
                     await asyncio.sleep(3.5)
                 else:
                     bstatus = discord.Status.dnd
@@ -222,6 +237,101 @@ class Kiddo(commands.Bot):
                         )
                     break
         return (res, status)
+
+    async def get_equipped(self, uid, ctx=None):
+        old_equipped = await self.pool.fetchval(postgres.queries['fetch_weapons'], uid) or []
+        equipped = [i[0] for i in old_equipped]
+        hands, dmg_lim, amr_lim = 0, 101, 101
+        shield = False
+        skipped = []
+        profile = []
+        idmin = 0
+        if len(equipped) > 0:
+            (res, status) = await self.idle_query(api.queries['equip_old'].format(owner=uid, ids=','.join(equipped)), ctx)
+            if status == 429:
+                raise errors.TooManyRequests(ctx)
+            equipped.clear()
+            if len(res) > 0 and 'profile' in res[0]:
+                profile.append(res[0]['profile']['race'])
+                profile.append(utils.transmute_class(res[0]['profile']))
+                profile.append(res[0]['profile']['guild'])
+                profile.append([res[0]['profile']['atkmultiply'], res[0]['profile']['atkmultiply']])
+            for i in res:
+                if 'inventory' in i and i['inventory']:
+                    hands += 2 if i['hand'] == 'both' else 1
+                    equipped.append(i)
+                    if i['type'] == 'Shield': shield = True
+        while hands < 2 and (
+            dmg_lim + amr_lim > 0 or len(skipped) > 0
+        ):
+            hand_query = ['right', 'any']
+            if not shield: hand_query += ['left']
+            if hands == 0: hand_query += ['both']
+            if idmin > 0:
+                skipped = [i for i in skipped if i > idmin]
+                s_query = f'&armor=eq.{amr_lim}'
+                if amr_lim == 0: s_query += f'&damage=eq.{dmg_lim}'
+                query = api.queries['scan_stats'].format(
+                    owner=uid, ids=','.join([str(i['id']) for i in equipped] + [str(i) for i in skipped]), hands=','.join(hand_query),
+                    idmin=idmin, stats=s_query
+                )
+            elif len(skipped) > 0 or dmg_lim + amr_lim > 0:
+                query = api.queries['equipped'].format(
+                    owner=uid, ids=','.join([str(i['id']) for i in equipped] + [str(i) for i in skipped]), hands=','.join(hand_query),
+                    damage=dmg_lim, armor=amr_lim
+                )
+            else:
+                query = api.queries['scan_stats'].format(
+                    owner=uid, ids=','.join([str(i['id']) for i in equipped] + [str(i) for i in skipped]), hands=','.join(hand_query),
+                    idmin=idmin, stats='&damage=eq.0&armor=eq.0'
+                )
+            (res, status) = await self.idle_query(query, ctx)
+            if len(res) == 0:
+                if amr_lim > 0:
+                    amr_lim -= 1
+                    skipped = []
+                elif dmg_lim > 0:
+                    dmg_lim -= 1
+                    skipped = []
+                else:
+                    break
+                await asyncio.sleep(3.5)
+            else:
+                if len(profile) == 0 and 'profile' in res[0]:
+                    profile.append(res[0]['profile']['race'])
+                    profile.append(utils.transmute_class(res[0]['profile']))
+                    profile.append(res[0]['profile']['guild'])
+                    profile.append([res[0]['profile']['atkmultiply'], res[0]['profile']['atkmultiply']])
+                for i in res:
+                    if hands == 2: break
+                    if 'inventory' in i and i['inventory']:
+                        hands += 2 if i['hand'] == 'both' else 1
+                        equipped.append(i)
+                        if i['type'] == 'Shield': shield = True
+                if hands < 2:
+                    if amr_lim > 0 and shield:
+                        amr_lim, idmin, skipped = 0, 0, []
+                    elif amr_lim > 0 and amr_lim > int(res[-1]['armor']):
+                        amr_lim, idmin, skipped = int(res[-1]['armor']), 0, [i['id'] for i in res if i['armor'] == res[-1]['armor']]
+                    elif amr_lim > 0 and amr_lim == int(res[-1]['armor']):
+                        if len(res) < 250:
+                            amr_lim, idmin, skipped = amr_lim - 1, 0, []
+                        elif idmin == 0:
+                            idmin = 1
+                            skipped += [i['id'] for i in res if i['armor'] == res[-1]['armor']]
+                        else:
+                            idmin = res[-1]['id']
+                    elif dmg_lim > int(res[-1]['damage']):
+                        dmg_lim, idmin, skipped = int(res[-1]['damage']), 0, [i['id'] for i in res if i['damage'] == res[-1]['damage']]
+                    elif len(res) < 250:
+                        dmg_lim, idmin, skipped = dmg_lim - 1, 0, []
+                    elif idmin == 0:
+                        idmin = 1
+                        skipped += [i['id'] for i in res if i['damage'] == res[-1]['damage']]
+                    else: idmin = res[-1]['id']
+                    await asyncio.sleep(3.5)
+        return equipped
+        # await self.pool.execute(postgres.queries['weapon_update'], )
 
     def _get_prefix(self, bot, message):
         if not message.guild:

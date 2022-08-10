@@ -235,29 +235,29 @@ class Paginator:
                     if hasattr(p, 'footer'):
                         if len(self.extras) > 1:
                             if not p.footer and not self.footer:
-                                p.set_footer(text='Page {}/{}'.format(self.extras.index(p) + 1, len(self.extras)), icon_url=author.avatar.url)  # type: ignore
+                                p.set_footer(text='Page {}/{}'.format(self.extras.index(p) + 1, len(self.extras)), icon_url=author.display_avatar.url)
                             else:
-                                p.set_footer(text=(p.footer.text if p.footer else self.footer) + ' | Page {}/{}'.format(self.extras.index(p) + 1, len(self.extras)), icon_url=(p.footer.icon_url or ctx.avatar.url))  # type: ignore
+                                p.set_footer(text=(p.footer.text if p.footer else self.footer) + ' | Page {}/{}'.format(self.extras.index(p) + 1, len(self.extras)), icon_url=(p.footer.icon_url or ctx.display_avatar.url))  # type: ignore
                         elif len(self.extras) == 1:
-                            p.set_footer(text=p.footer.text if p.footer else self.footer, icon_url=p.footer.icon_url if p.footer and p.footer.icon_url else author.avatar.url)  # type: ignore
+                            p.set_footer(text=p.footer.text if p.footer else self.footer, icon_url=p.footer.icon_url if p.footer and p.footer.icon_url else author.display_avatar.url)
                     if hasattr(p, 'timestamp'):
                         if not p.timestamp:
                             p.timestamp = self.timestamp or datetime.datetime.now(datetime.timezone.utc)
                     self.pages.append(p)
 
         if self.entries:
-            chunks = [c async for c in pager(self.entries, self.length)]
+            chunks = [c for c in pager(self.entries, self.length)]
 
             for index, chunk in enumerate(chunks):
                 page = discord.Embed(
                     title=f"{self.title} - {index + 1}/{len(chunks)}", color=self.color
                 )
-                page.set_footer(text=f'Page {index + 1}/{len(chunks)}', icon_url=author.avatar.url)  # type: ignore
+                page.set_footer(text=f'Page {index + 1}/{len(chunks)}', icon_url=author.display_avatar.url)
                 page.description = self.formmater(chunk)
                 page.timestamp = self.timestamp or datetime.datetime.now(datetime.timezone.utc)
                 if hasattr(self, "footer"):
                     if self.footer:
-                        page.set_footer(text=self.footer, icon_url=author.avatar.url)  # type: ignore
+                        page.set_footer(text=self.footer, icon_url=author.display_avatar.url)
                     else:
                         page.title = self.title
                 self.pages.append(page)

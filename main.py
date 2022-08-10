@@ -18,8 +18,6 @@ async def main():
     async with ClientSession() as client, asyncpg.create_pool(os.getenv('DATABASE')) as pool, aioredis.from_url(os.getenv('REDIS'), decode_responses=True) as redis:  # type: ignore
 
         exts = [f[:-3] for f in os.listdir('bot/cogs') if f.endswith('.py')]
-        pool = asyncpg.create_pool(os.getenv('DATABASE', ''))
-        redis = aioredis.from_url(os.getenv('REDIS', ''), decode_responses=True)
         PREFIX = os.getenv('DEFAULT_PREFIX', 'bea ')
         LOG_SERVER = int(os.getenv('LOG_SERVER', 0))
         
@@ -34,6 +32,33 @@ async def main():
             log_guild_id=LOG_SERVER,
             help_command=None
         ) as bot:
+
+            # @bot.tree.error
+            # async def error(ctx, error):
+            #     if isinstance(error, errors.ApiIsDead):
+            #         status = await bot.redis.get('idle-api') or 0
+            #         if error.status and int(status) != error.status:
+            #             await bot.redis.set('idle-api', status, ex=900)
+
+            #     elif isinstance(error, errors.KiddoException):
+            #         if isinstance(ctx, discord.Interaction):
+            #             try:
+            #                 await ctx.followup.send(str(error), ephemeral=True)
+            #             except discord.NotFound:
+            #                 try:
+            #                     await ctx.response.send_message(str(error), ephemeral=True)
+            #                 except discord.NotFound:
+            #                     await ctx.channel.send(str(error))
+            #         elif isinstance(ctx, commands.Context):
+            #             await ctx.send(str(error))
+            #         else:
+            #             print(str(error))
+
+                # else:
+                #     try:
+                #         await bot.log_error(error)
+                #     except Exception:
+                        # print(ctx.guild.name if ctx.guild else 'DM', error, traceback.extract_stack())
 
             await bot.start(os.getenv('TOKEN', ''))
 
