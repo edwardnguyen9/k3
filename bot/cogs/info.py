@@ -824,7 +824,7 @@ class Info(commands.Cog):
     )
     async def _gvg(self, ctx):
         members = []
-        res = await self.bot.pool.fetchval('SELECT guild FROM profile3 WHERE "user"=$1', ctx.author.id)
+        res = await self.bot.pool.fetchval('SELECT guild FROM profile3 WHERE uid=$1', ctx.author.id)
         if res is None or res < 1: return await ctx.send('Your data has not been updated.')
         (res, status) = await self.bot.idle_query(
             idle.queries['guild'].format(
@@ -844,10 +844,15 @@ class Info(commands.Cog):
                 p = await Profile.get_profile(self.bot, data=i)
                 data = p.fighter_data()
                 print(p.user, data[0]+data[1])
-                await p.update_profile(self.bot)
-                members.append([p.user, data[0] + data[1]])
+                # await p.update_profile(self.bot)
+                members.append([p, data[0] + data[1]])
+            now = datetime.datetime.now(datetime.timezone.utc)
+            await self.bot.pool.executemany(
+                postgres.queries['profile_update'],
+                [(i[0].user, i[0].race, i[0].classes, i[0].guild, i[0].raidstats, now) for i in members]
+            )
             members.sort(key=lambda x: x[1], reverse=True)
-            description = ['{stats} - battle nominate {id}'.format(id=u[0], stats=u[1]) for u in members[:20]]
+            description = ['{stats} - battle nominate {id}'.format(id=u[0].user, stats=u[1]) for u in members[:20]]
             return await ctx.send('\n'.join(description))
 
     async def _get_profile(self, ctx: Union[commands.Context, discord.Interaction], user: Union[discord.Member, discord.User], ephemeral: bool = False):
@@ -867,6 +872,8 @@ class Info(commands.Cog):
         elif len(res) == 0:
             return await send_message.send('The provided user does not have a profile.')
         else:
+            p = Profile(data=res[0])
+            await p.update_profile(self.bot)
             embed = embeds.profile(self.bot, res[0], weapons)
             embed.set_footer(text=(embed.footer.text or author.name), icon_url=author.display_avatar.url)
             return await send_message.send(embed=embed)

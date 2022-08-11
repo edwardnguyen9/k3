@@ -252,7 +252,7 @@ class Kiddo(commands.Bot):
                     break
         return (res, status)
 
-    async def get_equipped(self, uid, ctx=None, orgs=False):
+    async def get_equipped(self, uid, ctx=None, orgs=False, *, manual_update=False):
         old_equipped = await self.pool.fetchval(postgres.queries['fetch_weapons'], uid) or []
         equipped = [i[0] for i in old_equipped]
         hands, dmg_lim, amr_lim = 0, 101, 101
@@ -344,34 +344,18 @@ class Kiddo(commands.Bot):
                 raise errors.TooManyRequests(ctx)
             if len(res) > 0 and 'profile' in res[0]:
                 profile = res[0]['profile']
-                
+        to_update = None
         if len(profile) > 0:
             log_p = [profile['race'], utils.transmute_class(profile), profile['guild'], [profile['atkmultiply'], profile['defmultiply']]]
             log_w = [[str(i['id']), i['type'], str(int(i['damage'] + i['armor'])), i['name']] for i in equipped]
-            if not await self.pool.fetchval(
-                postgres.queries['existed'],
-                uid,
-            ):
-                await self.pool.execute(
-                    postgres.queries['new_weapons'],
-                    uid,
-                    *log_p,
-                    log_w,
-                    datetime.datetime.now(datetime.timezone.utc)
-                )
-            else:
-                await self.pool.execute(
-                    postgres.queries['update_weapons'],
-                    uid,
-                    *log_p,
-                    log_w,
-                    datetime.datetime.now(datetime.timezone.utc)
-                )
+            to_update = [uid, *log_p, log_w, datetime.datetime.now(datetime.timezone.utc)]
+            if not manual_update:
+                await self.pool.execute(postgres.queries['update_weapons'], *to_update)
         else: log_p, log_w = [], []
         if orgs:
-            return profile, equipped
+            return profile, equipped, to_update if manual_update else None
         else:
-            return log_p, log_w
+            return log_p, log_w, to_update if manual_update else None
 
     def _get_prefix(self, bot, message):
         if not message.guild:

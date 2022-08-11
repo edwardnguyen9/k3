@@ -41,9 +41,19 @@ class Admin(commands.Cog):
 
     @commands.command()
     async def test(self, ctx: commands.Context):
-        res = await self.bot.pool.fetchval('SELECT guild FROM profile3 WHERE "user"=$1', ctx.author.id)
-        # res = await self.bot.pool.fetchrow('SELECT race, classes, weapon, raidstats FROM profile3 WHERE "user"=$1', 0)
-        print(type(res), res)
+        print(await self.bot.pool.fetchval('SELECT adv FROM profile3 WHERE uid=$1', 0))
+        await self.bot.pool.execute(
+            'INSERT INTO profile3 (uid, adv) VALUES ($1, $2) ON CONFLICT (uid) DO UPDATE SET adv=$2;',
+            0, -1
+        )
+        print(await self.bot.pool.fetchval('SELECT adv FROM profile3 WHERE uid=$1', 0))
+        await self.bot.pool.execute(
+            'INSERT INTO profile3 (uid, adv) VALUES ($1, $2) ON CONFLICT (uid) DO UPDATE SET adv=$2;',
+            0, -10
+        )
+        print(await self.bot.pool.fetchval('SELECT adv FROM profile3 WHERE uid=$1', 0))
+        await self.bot.pool.execute('DELETE FROM profile3 WHERE uid=$1;', 0)
+        print(await self.bot.pool.fetchval('SELECT adv FROM profile3 WHERE uid=$1', 0))
         
 
 async def setup(bot):

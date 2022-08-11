@@ -1,7 +1,7 @@
 import discord, random, datetime
 
-from bot.assets import battle
-from bot.utils import utils
+from bot.assets import battle  # type: ignore
+from bot.utils import utils  # type: ignore
 
 class Fighter:
     def __init__(
@@ -70,11 +70,11 @@ class Fighter:
 
     async def cache(self, bot):
         if not await bot.pool.fetchval(
-        'SELECT EXISTS(SELECT 1 FROM profile WHERE "user"=$1);',
+        'SELECT EXISTS(SELECT 1 FROM profile WHERE uid=$1);',
         self.user.id,
         ):
             await bot.pool.execute(
-                'INSERT INTO profile ("user", wt, atk, def, ratk, rdef, guild, uatk, udef, classes)'
+                'INSERT INTO profile (uid, wt, atk, def, ratk, rdef, guild, uatk, udef, classes)'
                 ' VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10);',
                 self.user.id,
                 datetime.datetime.now(datetime.timezone.utc),
@@ -87,7 +87,7 @@ class Fighter:
         else:
             await bot.pool.execute(
                 'UPDATE profile SET wt=$2, atk=$3, def=$4, ratk=$5, rdef=$6, guild=$7, uatk=$8, udef=$9, classes=$10'
-                ' WHERE "user"=$1;',
+                ' WHERE uid=$1;',
                 self.user.id,
                 datetime.datetime.now(datetime.timezone.utc),
                 self.dmg, self.amr,
@@ -100,11 +100,11 @@ class Fighter:
     @staticmethod
     async def get_cached_fighter(bot, user):
         if await bot.pool.fetchval(
-            'SELECT EXISTS(SELECT 1 FROM profile WHERE "user"=$1);',
+            'SELECT EXISTS(SELECT 1 FROM profile WHERE uid=$1);',
             user.id
         ):
             res = await bot.pool.fetchval(
-                'SELECT (atk, def, ratk, rdef, guild, uatk, udef, xp, classes[1:2]) FROM profile WHERE "user"=$1', user.id
+                'SELECT (atk, def, ratk, rdef, guild, uatk, udef, xp, classes[1:2]) FROM profile WHERE uid=$1', user.id
             )
             f = Fighter(user, dmg=int(res[0]), amr=int(res[1]), atkm=float(res[2]), defm=float(res[3]))
             f.guild = res[4]

@@ -17,6 +17,7 @@ class Profile:
         self.deaths = data['deaths'] if 'deaths' in data else deaths
         self.luck = data['luck'] if 'luck' in data else 1
         self.weapons = weapons
+        self.new = True
 
     def fighter_data(self):
         dmg, amr = utils.get_race_bonus(self.race)
@@ -34,88 +35,40 @@ class Profile:
         return (dmg, amr, rd, ra)
 
     async def update_profile(self, bot):
-        now = datetime.datetime.now(datetime.timezone.utc)
-        if not await bot.pool.fetchval(
-            postgres.queries['existed'],
+        await bot.pool.execute(
+            postgres.queries['profile_update'],
             self.user,
-        ):
-            await bot.pool.execute(
-                postgres.queries['profile_new'],
-                self.user,
-                self.race,
-                self.classes,
-                self.guild,
-                self.raidstats,
-                now
-            )
-        else:
-            await bot.pool.execute(
-                postgres.queries['profile_update'],
-                self.user,
-                self.race,
-                self.classes,
-                self.guild,
-                self.raidstats,
-                now
-            )
+            self.race,
+            self.classes,
+            self.guild,
+            self.raidstats,
+            datetime.datetime.now(datetime.timezone.utc)
+        )
 
     @staticmethod
     async def update_adventures(bot, data):
-        if not await bot.pool.fetchval(
-            postgres.queries['existed'],
-            data[0],
-        ):
-            await bot.pool.execute(
-                postgres.queries['adv_new'],
-                *data,
-            )
-        else:
-            await bot.pool.execute(
-                postgres.queries['adv_update'],
-                *data,
-            )
-
-    @staticmethod
-    async def update_weapons(bot, user, data):
-        now = datetime.datetime.now(datetime.timezone.utc)
-        if not await bot.pool.fetchval(
-            postgres.queries['existed'],
-            user[0],
-        ):
-            await bot.pool.execute(
-                postgres.queries['weapon_new'],
-                *user,
-                data,
-                now
-            )
-        else:
-            await bot.pool.execute(
-                postgres.queries['weapon_updated'],
-                *user,
-                data,
-                now
-            )
+        await bot.pool.execute(
+            postgres.queries['adv_update'],
+            *data,
+        )
 
     @staticmethod
     async def get_profile(bot, *, user = 0, data = {}):
         uid = data['user'] if 'user' in data else user
         p = None
-        if await bot.pool.fetchval(
-            postgres.queries['existed'],
-            uid,
-        ):
-            res = await bot.pool.fetchrow(
-                'SELECT race, classes, weapon, guild, raidstats FROM profile3 WHERE "user"=$1',
-                uid
-            )
-            if res:
-                p = Profile(
-                    user=uid,
-                    race=data['race'] if 'race' in data else res['race'],
-                    classes=[idle.classes[i] for i in data['class'] if i in idle.classes] if 'class' in data else res['classes'],
-                    guild=data['guild'] if 'guild' in data else res['guild'],
-                    raidstats=[data['atkmultiply'], data['defmultiply']] if 'atkmultiply' in data and 'defmultiply' in data else res['raidstats'],
-                    weapons=res['weapon'])
+        res = await bot.pool.fetchrow(
+            'SELECT race, classes, weapon, guild, raidstats FROM profile3 WHERE uid=$1',
+            uid
+        )
+        if res:
+            p = Profile(
+                user=uid,
+                race=data['race'] if 'race' in data else res['race'],
+                classes=[idle.classes[i] for i in data['class'] if i in idle.classes] if 'class' in data else res['classes'],
+                guild=data['guild'] if 'guild' in data else res['guild'],
+                raidstats=[data['atkmultiply'], data['defmultiply']] if 'atkmultiply' in data and 'defmultiply' in data else res['raidstats'],
+                weapons=res['weapon'])
+            p.new = False
         if p is None:
             p = Profile(user=uid, data=data)
         return p
