@@ -1,9 +1,7 @@
 import discord
 from discord.ext import commands
-from typing import Union
 
 from bot.classes import ui
-from bot.utils import utils
 
 class Admin(commands.Cog):
     def __init__(self, bot):
@@ -42,14 +40,11 @@ class Admin(commands.Cog):
         await interaction.followup.send(f.feedback)  # type: ignore
 
     @commands.command()
-    async def test(self, ctx: commands.Context, user: discord.User):
-        profile, weapons = await self.bot.get_equipped(user.id, ctx)
-        damage, armor = utils.get_race_bonus(profile[0])
-        damage += sum([int(i[2]) for i in weapons if i[1] != 'Shield']) + utils.get_weapon_bonus(weapons, profile[1]) + utils.get_class_bonus('dmg', profile[1])
-        armor += sum([int(i[2]) for i in weapons if i[1] == 'Shield']) + utils.get_class_bonus('amr', profile[1])
-        rd = round(profile[3][0] + utils.get_class_bonus('rdr', profile[1]) / 10, 1)
-        ra = round(profile[3][1] + utils.get_class_bonus('rdr', profile[1]) / 10, 1)
-        await ctx.send(' | '.join(map(str, [damage, armor, rd, ra])))
+    async def test(self, ctx: commands.Context):
+        res = await self.bot.pool.fetchval('SELECT guild FROM profile3 WHERE "user"=$1', ctx.author.id)
+        # res = await self.bot.pool.fetchrow('SELECT race, classes, weapon, raidstats FROM profile3 WHERE "user"=$1', 0)
+        print(type(res), res)
+        
 
 async def setup(bot):
     await bot.add_cog(Admin(bot))

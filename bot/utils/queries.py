@@ -1,7 +1,7 @@
 import discord
 from urllib.parse import quote
 
-from bot.assets import api
+from bot.assets import idle  # type: ignore
 
 def minmax(_name, _min, _max):
     temp = []
@@ -12,7 +12,7 @@ def minmax(_name, _min, _max):
     else: return ''
 
 def query_class(class_tree: str):
-    tree = [k for k, v in api.classes.items() if v[0] == class_tree]
+    tree = [k for k, v in idle.classes.items() if v[0] == class_tree]
     return '&class=ov.{' + ','.join(tree) + '}'
 
 def profiles(
@@ -28,8 +28,8 @@ def profiles(
     query = 'profile?limit={}&order={}'.format(limit, sort)
     if name: query += '&name=plfts.{}'.format(quote(name))
     temp = []
-    if lvmin: temp.append('gte.{}'.format(api.levels[lvmin - 1]))
-    if lvmax: temp.append('lte.{}'.format(api.levels[lvmax] - 1))
+    if lvmin: temp.append('gte.{}'.format(idle.levels[lvmin - 1]))
+    if lvmax: temp.append('lte.{}'.format(idle.levels[lvmax] - 1))
     if len(temp) == 2: query += '&and=(xp.{},xp.{})'.format(*temp)
     elif len(temp) == 1: query += '&xp={}'.format(*temp)
     if race: query += '&race=in.({})'.format(race.title().replace(' ', ','))
@@ -150,7 +150,7 @@ def loot(
     if reverse:
         if '.desc' in sort: sort.replace('.desc', '.asc')
         else: sort.replace('.asc', '.desc')
-    query = api.QUERY_PREFIX + 'loot?limit={}&order={}'.format(limit if 0 < limit < 250 else 250, sort)
+    query = idle.QUERY_PREFIX + 'loot?limit={}&order={}'.format(limit if 0 < limit < 250 else 250, sort)
     if name: query += '&name=plfts.{}'.format(quote(name))
     if user: query += '&user=eq.{}'.format(user.id)
     query += minmax('id', imin, imax)

@@ -1,5 +1,9 @@
+from decimal import Decimal
+
 QUERY_PREFIX = 'https://public-api.travitia.xyz/idle/'
 
+
+weapon_fetching_guilds = [17555, 2807, 8244, 6055, 20314]
 max_raid_building = [2807, 8244, 13992, 6055, 17555, 3960, 20314, 15356, 19599, 20120, 20809, 25859]
 
 crates = ['crates_common', 'crates_uncommon', 'crates_rare', 'crates_magic', 'crates_legendary', 'crates_mystery']
@@ -15,10 +19,9 @@ queries = {
     # Item
     'item':         'allitems?id=eq.{id}&select=*,market(price),inventory(equipped)',
     # Guild
-    'guild':        'guild?id=eq.{id}&select=id,leader,channel,memberlimit,money,banklimit,wins,upgrade,name,description,icon,alliance(*)',
-    'guildrank':    'profile?guild=eq.{id}&select=guildrank,user',
-    'alliance':     'guild?select=name,id,alliance,leader,description,money&or=(id.eq.{id},alliance.eq.{id})',
-    'funds':        'profile?guild=eq.{id}&select=money,{crates},guild_leader_fkey(name,money,leader,alliance)',
+    'guild':       'profile?guild=eq.{id}&order=xp.desc&select=guildrank,user,money,{custom},guild_leader_fkey(id,leader,channel,memberlimit,money,banklimit,wins,upgrade,name,description,icon,alliance(*))',
+    'alliance':     'guild?select=name,id,alliance,leader,description,money&or=(id.eq.{gid},alliance.eq.{aid})',
+    'stats':        'profile?guild=in.({ids})&select=user,name,xp,race,class,atkmultiply,defmultiply&order=xp.desc'
 }
 
 # Profile consts
@@ -92,15 +95,26 @@ classes = {
 races = ['Jikill', 'Elf', 'Human', 'Dwarf', 'Orc']
 
 gods = {
-    'Lyx': 444169012809564161,
     'The Assassin': 294894701708967936,
+    'Kvothe': 489637665633730560,
+    'CHamburr': 446290930723717120,
+    'Eden': 339217921576402956,
+    'Jesus': 322354047162122243,
+    'Lyx': 444169012809564161,
     'Kirby': 589493375527419905,
     'Monox': 149505704569339904,
-    'Eden': 339217921576402956,
-    'Kvothe': 489637665633730560,
-    'Jesus': 322354047162122243,
-    'CHamburr': 446290930723717120
 }
+
+luck_options = ['The Assassin', 'Kvothe', 'CHamburr', 'Eden', 'Jesus', 'Lyx', 'Kirby', 'Monox']
+
+luck_label = [
+    'Timestamp', 'Assassin', 'Kvothe', 'CHamburr', 'Eden', 'Jesus', 'Lyx', 'Kirby', 'Monox'
+]
+
+luck_range = [
+    Decimal(0.25), Decimal(0.3), Decimal(0.2), Decimal(0.5), Decimal(1), Decimal(0.4), Decimal(1), Decimal(1)
+]
+
 
 levels = [
     0, 1500, 9000, 22500, 42000, 67500,
@@ -337,3 +351,4 @@ adventures = [
     "Meet The War God In Hell",
     "Divine Intervention",
 ]
+

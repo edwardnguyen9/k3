@@ -10,4 +10,6 @@ queries = {
     'new_weapons':      'INSERT INTO profile3 ("user", race, classes, guild, raidstats, weapon, dt, wt) VALUES ($1, $2, $3, $4, $5, $6, $7, $7);',
     'update_weapons':   'UPDATE profile3 SET race=$2, classes=$3, guild=$4, raidstats=$5, weapon=$6, dt=$7, wt=$7 WHERE "user"=$1;',
     'fetch_user':       'SELECT * FROM profile3 WHERE "user"=$1',
+    'fetch_profile':    'SELECT race, classes, weapon, raidstats FROM profile3 WHERE "user"=$1',
+    'fetch_guild':      'SELECT guild FROM profile3 WHERE "user"=$1',
 }

@@ -8,7 +8,7 @@ from io import BytesIO
 from pprint import pformat
 from dotenv import load_dotenv
 
-from bot.assets import api, postgres  # type: ignore
+from bot.assets import idle, postgres  # type: ignore
 from bot.utils import errors, utils  # type: ignore
 
 load_dotenv()
@@ -144,6 +144,20 @@ class Kiddo(commands.Bot):
             File = discord.File(filename='error-{}.json'.format(type(err).__name__), fp=BytesIO(pformat(error_body).encode()))
             await channel.send(content='{}\n\n\n**{}**: {}'.format(self.owner.mention, type(err).__name__, err), file=File)  # type: ignore
 
+    async def log_event(self, event: str, *, message: Optional[str] = None, embed: Optional[discord.Embed] = None, file: Optional[discord.File] = None):
+        if utils.check_if_all_null(message, embed, file): return
+        server = self.get_guild(self.log_guild_id)
+        if server is None: return
+        channel = discord.utils.get(server.text_channels, name=f'k3-{event}-logs')
+        if channel is None:
+            cat = discord.utils.get(server.categories, name='kiddo 3 logs')
+            if cat is None: return
+            try:
+                channel = await server.create_text_channel(name=f'k3-{event}-logs', category=cat)
+            except discord.Forbidden:
+                return
+        return await channel.send(message, embed=embed, file=file)  # type: ignore
+
     async def setup_hook(self) -> None:
         # Load extensions
         for extension in self.initial_extensions:
@@ -206,9 +220,9 @@ class Kiddo(commands.Bot):
         res, status = [], 0
         for i in range(tries):
             start_time = datetime.datetime.now()
-            if len(query) > 0 and query.startswith(api.QUERY_PREFIX): query = query[len(api.QUERY_PREFIX):]
+            if len(query) > 0 and query.startswith(idle.QUERY_PREFIX): query = query[len(idle.QUERY_PREFIX):]
             async with self.session.get(
-                api.QUERY_PREFIX + query, headers=self.get_token()
+                idle.QUERY_PREFIX + query, headers=self.get_token()
             ) as r:
                 end_time = datetime.datetime.now()
                 delay = round((end_time - start_time)/datetime.timedelta(microseconds=1000))
@@ -247,7 +261,7 @@ class Kiddo(commands.Bot):
         profile = {}
         idmin = 0
         if len(equipped) > 0:
-            (res, status) = await self.idle_query(api.queries['equip_old'].format(owner=uid, ids=','.join(equipped)), ctx)
+            (res, status) = await self.idle_query(idle.queries['equip_old'].format(owner=uid, ids=','.join(equipped)), ctx)
             if status == 429:
                 raise errors.TooManyRequests(ctx)
             equipped.clear()
@@ -268,17 +282,17 @@ class Kiddo(commands.Bot):
                 skipped = [i for i in skipped if i > idmin]
                 s_query = f'&armor=eq.{amr_lim}'
                 if amr_lim == 0: s_query += f'&damage=eq.{dmg_lim}'
-                query = api.queries['scan_stats'].format(
+                query = idle.queries['scan_stats'].format(
                     owner=uid, ids=','.join([str(i['id']) for i in equipped] + [str(i) for i in skipped]), hands=','.join(hand_query),
                     idmin=idmin, stats=s_query
                 )
             elif len(skipped) > 0 or dmg_lim + amr_lim > 0:
-                query = api.queries['equipped'].format(
+                query = idle.queries['equipped'].format(
                     owner=uid, ids=','.join([str(i['id']) for i in equipped] + [str(i) for i in skipped]), hands=','.join(hand_query),
                     damage=dmg_lim, armor=amr_lim
                 )
             else:
-                query = api.queries['scan_stats'].format(
+                query = idle.queries['scan_stats'].format(
                     owner=uid, ids=','.join([str(i['id']) for i in equipped] + [str(i) for i in skipped]), hands=','.join(hand_query),
                     idmin=idmin, stats='&damage=eq.0&armor=eq.0'
                 )
@@ -325,7 +339,7 @@ class Kiddo(commands.Bot):
                     else: idmin = res[-1]['id']
                     await asyncio.sleep(3.5)
         if len(profile) == 0:
-            (res, status) = await self.idle_query(api.queries['profile'].format(userid=uid), ctx)
+            (res, status) = await self.idle_query(idle.queries['profile'].format(userid=uid), ctx)
             if status == 429:
                 raise errors.TooManyRequests(ctx)
             if len(res) > 0 and 'profile' in res[0]:

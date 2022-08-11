@@ -1,8 +1,8 @@
-import discord, math
+import discord, math, json
 from typing import Union
+from decimal import Decimal
 
-from bot.assets import api
-from bot.classes.profile import Profile
+from bot.assets import idle  # type: ignore
 
 def pager(entries, chunk: int, similar_chunk: bool = False):
     if similar_chunk:
@@ -32,7 +32,7 @@ def embedcolor(colours: dict):
 def getlevel(xp: int):
     """Returns user's level (int)"""
     level = 0
-    for i in api.levels:
+    for i in idle.levels:
         if xp >= i:
             level += 1
         else:
@@ -42,7 +42,7 @@ def getlevel(xp: int):
 def getnextlevel(xp: int):
     """Returns user's XP until next level (int)"""
     level = 0
-    for i in api.levels:
+    for i in idle.levels:
         if xp >= i:
             level += 1
         else:
@@ -50,36 +50,36 @@ def getnextlevel(xp: int):
     if level == 30:
         return None
     else:
-        return api.levels[level] - xp
+        return idle.levels[level] - xp
 
 def getnextevol(xp: int):
     """Returns user's XP until next milestone (int)"""
     level = 0
-    for i in api.levels:
+    for i in idle.levels:
         if xp >= i:
             level += 1
         else:
             break
     if level < 12:
-        return api.levels[11] - xp
+        return idle.levels[11] - xp
     elif level == 30:
         return None
     else:
-        return api.levels[(level // 5 + 1) * 5 - 1] - xp
+        return idle.levels[(level // 5 + 1) * 5 - 1] - xp
 
 def getto30(xp: int):
-    return api.levels[-1] - xp if api.levels[-1] > xp else 0
+    return idle.levels[-1] - xp if idle.levels[-1] > xp else 0
 
 def get_class_bonus(check: str, data: Union[dict, list]):
     bonus = 0
     c = ['wrr', 'prg'] if check == 'amr' else ['mge', 'prg'] if check == 'dmg' else [check]
-    classes = [api.classes[i] for i in data['class'] if i in api.classes] if isinstance(data, dict) else data
+    classes = [idle.classes[i] for i in data['class'] if i in idle.classes] if isinstance(data, dict) else data
     for i in classes:
         if i[0] in c: bonus += int(i[1])
     return bonus
 
 def get_race_bonus(r: str):
-    i = api.races.index(r)
+    i = idle.races.index(r)
     return (4-i, i)
 
 def get_weapon_bonus(weapons, classes):
@@ -87,22 +87,22 @@ def get_weapon_bonus(weapons, classes):
     for i in weapons:
         if isinstance(i, dict):
             if (
-                i['type'] in api.weapon_bonus
-                and len(api.weapon_bonus[i['type']][0].intersection([j[0] for j in classes])) > 0
+                i['type'] in idle.weapon_bonus
+                and len(idle.weapon_bonus[i['type']][0].intersection([j[0] for j in classes])) > 0
             ):
-                bonus += api.weapon_bonus[i['type']][1]
+                bonus += idle.weapon_bonus[i['type']][1]
             else:
                 continue
         else:
             if (
-                i[1] in api.weapon_bonus
-                and len(api.weapon_bonus[i[1]][0].intersection([j[0] for j in classes])) > 0
+                i[1] in idle.weapon_bonus
+                and len(idle.weapon_bonus[i[1]][0].intersection([j[0] for j in classes])) > 0
             ):
-                bonus += api.weapon_bonus[i[1]][1]
+                bonus += idle.weapon_bonus[i[1]][1]
     return bonus
 
 def transmute_class(data):
-    return [api.classes[i] for i in data['class'] if i in api.classes]
+    return [idle.classes[i] for i in data['class'] if i in idle.classes]
 
 def adv_success(profile, level, booster, building):
     a, d, _, _ = profile.fighter_data()
@@ -112,3 +112,11 @@ def adv_success(profile, level, booster, building):
     chances.sort()
     if chances[0] < 0 and profile.luck == 0: return None
     else: return [(round(c * profile.luck if c >= 0 else c / profile.luck) + 25 * booster) for c in chances]
+
+async def get_luck(bot, limit = 10):
+    res = await bot.redis.lrange('lucklog', 0, limit-1)
+    data = []
+    for i in res:
+        i_loaded = json.loads(i.replace('\'', '"'))
+        data.append([i_loaded[0], *[Decimal(x) for x in i_loaded[1:]]])
+    return data

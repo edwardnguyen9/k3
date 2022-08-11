@@ -2,7 +2,7 @@ import discord
 from discord.ext import commands
 from typing import Optional
 
-from bot.assets import api
+from bot.assets import idle
 
 # Profile
 
@@ -22,23 +22,23 @@ async def auto_class(interaction: discord.Interaction, current: str) -> list[dis
 
 async def auto_race(interaction: discord.Interaction, current: str) -> list[discord.app_commands.Choice[str]]:  # type: ignore
     return [
-        discord.app_commands.Choice(name=i, value=i) for i in api.races if current.lower() in i.lower()
+        discord.app_commands.Choice(name=i, value=i) for i in idle.races if current.lower() in i.lower()
     ]
 
 async def auto_god(interaction: discord.Interaction, current: str) -> list[discord.app_commands.Choice[str]]:  # type: ignore
     return [
-        discord.app_commands.Choice(name=i, value=i) for i in api.gods if current.lower() in i.lower()
+        discord.app_commands.Choice(name=i, value=i) for i in idle.gods if current.lower() in i.lower()
     ]
 
 # Item
 
 async def auto_type(interaction: discord.Interaction, current: str) -> list[discord.app_commands.Choice[str]]:  # type: ignore
     return [
-        discord.app_commands.Choice(name=i, value=i) for i in api.weapontypes if current.lower() in i.lower()
+        discord.app_commands.Choice(name=i, value=i) for i in idle.weapontypes if current.lower() in i.lower()
     ]
 
 async def auto_hand(interaction: discord.Interaction, current: str) -> list[discord.app_commands.Choice[str]]:  # type: ignore
     return [
-        discord.app_commands.Choice(name=i, value=i) for i in api.weaponhands if current.lower() in i.lower()
+        discord.app_commands.Choice(name=i, value=i) for i in idle.weaponhands if current.lower() in i.lower()
     ]
 

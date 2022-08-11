@@ -1,9 +1,7 @@
 import discord, datetime
 from random import getrandbits
-from humanize import intcomma, naturaldelta
-from typing import Optional
 
-from bot.assets import api
+from bot.assets import idle  # type: ignore
 from bot.utils import utils  # type: ignore
 
 # Profile
@@ -18,24 +16,23 @@ def profile(bot, p, weapons: list = []):
         embed.set_thumbnail(url=p['background'])
     
     # General field
+    p_dmg = utils.get_class_bonus('dmg', p)
+    p_amr = utils.get_class_bonus('amr', p)
     ranger = utils.get_class_bonus('rng', p)
-    warrior = utils.get_class_bonus('wrr', p)
-    mage = utils.get_class_bonus('mge', p)
-    paragon = utils.get_class_bonus('prg', p)
     thief = utils.get_class_bonus('thf', p)
     ritualist = utils.get_class_bonus('rtl', p)
-    raider = utils.get_class_bonus('rdr', p)
+    raider = utils.get_class_bonus('rdr', p) / 10
     
     boosted = []
-    if (paragon + mage + warrior):
+    if p_dmg + p_amr:
         boosted.append([])
-        if paragon + mage:
-            boosted[0].append('+{0} ATK'.format(paragon + mage))
-        if paragon + warrior:
-            boosted[0].append('+{0} DEF'.format(paragon + warrior))
+        if p_dmg:
+            boosted[0].append('+{0} ATK'.format(p_dmg))
+        if p_amr:
+            boosted[0].append('+{0} DEF'.format(p_amr))
         boosted[0] = ' and '.join(boosted[0])
     if raider:
-        boosted.append(f'Raidstats +{round(raider/10, 1)}x')
+        boosted.append(f'Raidstats +{raider:.1f}x')
     if thief:
         boosted.append(f'Steal chance: {thief * 8}%')
     if ritualist:
@@ -47,46 +44,46 @@ def profile(bot, p, weapons: list = []):
     field_general = [
         '**User:** <@{}>'.format(p['user']),
         '**Race:** {}'.format(p['race']),
-        '*{} {}*'.format(api.race_options[p['race']][-1], api.race_options[p['race']][p['cv']]) if p['cv'] > -1 else None,
+        '*{} {}*'.format(idle.race_options[p['race']][-1], idle.race_options[p['race']][p['cv']]) if p['cv'] > -1 else None,
         '**Classes:** {}'.format(' - '.join(p['class'])),
         '\n'.join(boosted) if len(boosted) > 0 else None,
     ]
     embed.description = '\n'.join([i for i in field_general if i is not None])
 
     # Stats field
-    rate = 0 if (p['deaths'] + p['completed']) == 0 else round(100.0 * p['deaths'] / (p['deaths'] + p['completed']), 2)
+    rate = 0 if (p['deaths'] + p['completed']) == 0 else 100.0 * p['deaths'] / (p['deaths'] + p['completed'])
     field_lvl = utils.getlevel(p['xp'])
     field_xptonext = utils.getnextevol(p['xp'])
     field_stats = []
     if len(weapons):
         (dmg, amr) = utils.get_race_bonus(p['race'])
-        dmg += sum([int(i[2]) for i in weapons if i[1] != 'Shield']) + utils.get_weapon_bonus(weapons, [api.classes[i] for i in p['class'] if i in api.classes]) + paragon + mage
-        amr += sum([int(i[2]) for i in weapons if i[1] == 'Shield']) + paragon + warrior
+        dmg += sum([int(i[2]) for i in weapons if i[1] != 'Shield']) + p_dmg + utils.get_weapon_bonus(weapons, [idle.classes[i] for i in p['class'] if i in idle.classes])
+        amr += sum([int(i[2]) for i in weapons if i[1] == 'Shield']) + p_amr
         field_stats.append('**ATK:** {} - **DEF:** {}'.format(dmg, amr))
-    raid_bonus = 0 if p['guild'] not in api.max_raid_building else 1
-    field_stats.append('**ATK/DEF multiplier:** {}/{}'.format(round(p['atkmultiply'] + raider + raid_bonus, 1), round(p['defmultiply'] + raider + raid_bonus, 1)))
-    field_stats.append('**Death rate:** {}/{} ({}%)'.format(intcomma(p['deaths']), intcomma(p['deaths'] + p['completed']), rate))
-    field_stats.append('**PvP wins:** {}'.format(intcomma(p['pvpwins'])))
-    field_stats.append('**XP:** {0} (Lvl. {1})'.format(intcomma(p['xp']), field_lvl))
-    if field_xptonext is not None: field_stats.append('**To {}:** {} XP'.format('next evolution' if field_lvl > 11 else 'second class', intcomma(field_xptonext)))
+    raid_bonus = 0 if p['guild'] not in idle.max_raid_building else 1
+    field_stats.append('**ATK/DEF multiplier:** {:.1f}/{:.1f}'.format(p['atkmultiply'] + raider + raid_bonus, p['defmultiply'] + raider + raid_bonus))
+    field_stats.append('**Death rate:** {:,d}/{:,d} ({:.2f}%)'.format(p['deaths'], p['deaths'] + p['completed'], rate))
+    field_stats.append('**PvP wins:** {:,d}'.format(p['pvpwins']))
+    field_stats.append('**XP:** {0:,d} (Lvl. {1})'.format(p['xp'], field_lvl))
+    if field_xptonext is not None: field_stats.append('**To {}:** {:,d} XP'.format('next evolution' if field_lvl > 11 else 'second class', field_xptonext))
 
     # Inventory field
     field_inventory = []
-    field_inventory.append('**Money:** ${}'.format(intcomma(p['money'])))
+    field_inventory.append('**Money:** ${:,d}'.format(p['money']))
     field_crate = []
-    if p['crates_common']: field_crate.append('{1} {0}'.format(str(bot.crates['c']), intcomma(p['crates_common'])))
-    if p['crates_uncommon']: field_crate.append('{1} {0}'.format(str(bot.crates['u']), intcomma(p['crates_uncommon'])))
-    if p['crates_rare']: field_crate.append('{1} {0}'.format(str(bot.crates['r']), intcomma(p['crates_rare'])))
-    if p['crates_magic']: field_crate.append('{1} {0}'.format(str(bot.crates['m']), intcomma(p['crates_magic'])))
-    if p['crates_legendary']: field_crate.append('{1} {0}'.format(str(bot.crates['l']), intcomma(p['crates_legendary'])))
-    if p['crates_mystery']: field_crate.append('{1} {0}'.format(str(bot.crates['my']), intcomma(p['crates_mystery'])))
+    if p['crates_common']: field_crate.append('{1:,d} {0}'.format(str(bot.crates['c']), p['crates_common']))
+    if p['crates_uncommon']: field_crate.append('{1:,d} {0}'.format(str(bot.crates['u']), p['crates_uncommon']))
+    if p['crates_rare']: field_crate.append('{1:,d} {0}'.format(str(bot.crates['r']), p['crates_rare']))
+    if p['crates_magic']: field_crate.append('{1:,d} {0}'.format(str(bot.crates['m']), p['crates_magic']))
+    if p['crates_legendary']: field_crate.append('{1:,d} {0}'.format(str(bot.crates['l']), p['crates_legendary']))
+    if p['crates_mystery']: field_crate.append('{1:,d} {0}'.format(str(bot.crates['my']), p['crates_mystery']))
     if len(field_crate) > 0: field_inventory.append('**Crates:** {}'.format(', '.join(field_crate)))
     field_booster = []
-    if p['time_booster']: field_booster.append('{} T'.format(p['time_booster']))
-    if p['money_booster']: field_booster.append('{} M'.format(p['money_booster']))
-    if p['luck_booster']: field_booster.append('{} L'.format(p['luck_booster']))
+    if p['time_booster']: field_booster.append('{:,d} T'.format(p['time_booster']))
+    if p['money_booster']: field_booster.append('{:,d} M'.format(p['money_booster']))
+    if p['luck_booster']: field_booster.append('{:,d} L'.format(p['luck_booster']))
     if len(field_booster) > 0: field_inventory.append('**Boosters:** {}'.format(', '.join(field_booster)))
-    if p['backgrounds'] and len(p['backgrounds']) > 0: field_inventory.append('**Event backgrounds:** {}'.format(len(p['backgrounds'])))
+    if p['backgrounds'] and len(p['backgrounds']) > 0: field_inventory.append('**Event backgrounds:** {:,d}'.format(len(p['backgrounds'])))
     field_inventory.append('**Reset points:** {}'.format(str(p['reset_points'])))
 
     field_community = []
@@ -106,10 +103,10 @@ def profile(bot, p, weapons: list = []):
     # Marriage
     if p['marriage']:
         field_community.append(
-            '**Spouse:** <@{uid}>\n(Lovescore: {ls} - {bonus}% bonus gold)'.format(
-                uid=str(p["marriage"]),
-                ls=intcomma(p['lovescore']),
-                bonus=intcomma(50 * (1 + p['lovescore']/1_000_000), 2)
+            '**Spouse:** <@{uid}>\n(Lovescore: {ls:,d} - {bonus:,.2f}% bonus gold)'.format(
+                uid=p["marriage"],
+                ls=p['lovescore'],
+                bonus=50 * (1 + p['lovescore']/1_000_000)
             )
         )
     # God
@@ -118,17 +115,17 @@ def profile(bot, p, weapons: list = []):
         'Heathen' if p['reset_points'] == -1 else 
         'Nonbeliever'
     )
-    if p['god'] in api.gods: field_god += ' (<@{}>)'.format(api.gods[p['god']])
-    if p['god'] or int(100 * p['luck']) != 100: field_god += '\n**Luck:** {}'.format(intcomma(p['luck'], 2))
-    if p['favor']: field_god += ' - **Favor:** {}'.format(intcomma(p['favor']))
+    if p['god'] in idle.gods: field_god += ' (<@{}>)'.format(idle.gods[p['god']])
+    if p['god'] or int(100 * p['luck']) != 100: field_god += '\n**Luck:** {:.2f}'.format(p['luck'])
+    if p['favor']: field_god += ' - **Favor:** {:,d}'.format(p['favor'])
     field_community.append(field_god)
 
     # Event field
     field_event = []
-    if p['chocolates']: field_event.append('**Chocolate boxes:** {}'.format(intcomma(p['chocolates'])))
-    if p['eastereggs']: field_event.append('**Easter eggs:** {}'.format(intcomma(p['eastereggs'])))
-    if p['trickortreat']: field_event.append('**Trick-or-treat bags:** {}'.format(intcomma(p['trickortreat'])))
-    if p['puzzles']: field_event.append('**Christmas puzzles:** {}'.format(intcomma(p['puzzles'])))
+    if p['chocolates']: field_event.append('**Chocolate boxes:** {:,d}'.format(p['chocolates']))
+    if p['eastereggs']: field_event.append('**Easter eggs:** {:,d}'.format(p['eastereggs']))
+    if p['trickortreat']: field_event.append('**Trick-or-treat bags:** {:,d}'.format(p['trickortreat']))
+    if p['puzzles']: field_event.append('**Christmas puzzles:** {:,d}'.format(p['puzzles']))
     
     embed.add_field(name='__**STATS**__', value='\n'.join(field_stats))
     embed.add_field(name='__**INVENTORY**__', value='\n'.join(field_inventory))
@@ -142,9 +139,9 @@ def profile(bot, p, weapons: list = []):
     if len(p['badges']) > 1:
         blist = []
         badges = p['badges'][::-1]
-        for i in range(0, len(api.badges)):
+        for i in range(0, len(idle.badges)):
             if i > len(badges): break
-            elif badges[i] == '1': blist.append(api.badges[i])
+            elif badges[i] == '1': blist.append(idle.badges[i])
         embed.set_footer(text='Badge{}: {}'.format('s' if len(blist) > 1 else '', ', '.join(blist)))
     # elif cache:
     #     embed.set_footer(
@@ -183,7 +180,7 @@ def items(page):
             'Owner: <@{}>'.format(item['owner']),
             signature,
             original,
-            None if 'market' not in item or not item['market'] else 'Selling price: ${}'.format(intcomma(item['market'][0]['price'])),
+            None if 'market' not in item or not item['market'] else 'Selling price: ${:,d}'.format(item['market'][0]['price']),
         ]
         embed.add_field(
             name=' '.join([i for i in [
@@ -197,8 +194,10 @@ def items(page):
 
 # Guild
 
-def guild(g, members: Optional[int] = None, officers: Optional[int] = None):
-    if g['alliance']['id'] != g['id']:
+def guild(g, members: int = 0, officers: list = [], money_data: list = [], crates: list = []):
+    if isinstance(g['alliance'], int) and g['alliance'] != g['id']:
+        al_info = 'Alliance: {}'.format(g['alliance'])
+    elif g['alliance']['id'] != g['id']:
         al_info = 'Alliance: {name} ({id})\n Alliance leader: <@{leader}>'.format(
             name=discord.utils.escape_markdown(g['alliance']['name']), id=g['alliance']['id'], leader=g['alliance']['leader']
         )
@@ -207,11 +206,15 @@ def guild(g, members: Optional[int] = None, officers: Optional[int] = None):
     info = ['ID: {}'.format(g['id']), 'Leader: <@{}>'.format(g['leader']), al_info]
     if g['channel']: info.append('Guild channel: <#{}>'.format(g['channel']))
     m_count = []
-    if members is not None: m_count.append('Member count: {}/{}'.format(members, g['memberlimit']))
-    if officers is not None: m_count.append('Officer count: {}'.format(officers))
+    if members > 0: m_count.append('Member count: {}/{}'.format(members, g['memberlimit']))
     if len(m_count) > 0: info.insert(1, ' | '.join(m_count))
-    stats = ['Bank: ${}/${}'.format(intcomma(g['money']),intcomma(g['banklimit'])), 'GvG wins: {}'.format(g['wins']), 'Times upgraded: {}'.format(g['upgrade'])]
-    if members is None: stats.append('Member limit: {}'.format(g['memberlimit']))
+    stats = [
+        'Bank: ${:,d}/${:,d}'.format(g['money'],g['banklimit']),
+        None if len(money_data) == 0 else 'In member account: ${:,d}'.format(money_data[0]),
+        'GvG wins: {:,d}'.format(g['wins']),
+        'Times upgraded: {}'.format(g['upgrade'])
+    ]
+    if members == 0: stats.append('Member limit: {}'.format(g['memberlimit']))
     embed = discord.Embed(
         title=discord.utils.escape_markdown(g['name']),
         description=g['description'],
@@ -222,8 +225,20 @@ def guild(g, members: Optional[int] = None, officers: Optional[int] = None):
         value='\n'.join(info)
     ).add_field(
         name='Stats',
-        value='\n'.join(stats)
+        value='\n'.join([i for i in stats if i is not None])
     )
+    if len(officers) > 0:
+        embed.add_field(
+            name='Officer',
+            value='\n'.join(map(lambda x: f'<@{x}>', officers)),
+            inline=False
+        )
+    if len(money_data) > 0:
+        embed.add_field(
+            name='Crates',
+            value=' | '.join(map(lambda x: f'{money_data[x]:,d} {crates[0][crates[x]]}', range(1,len(money_data)))),
+            inline=len(officers) > 0
+        )
     if not g['id'] in [760]: embed.set_thumbnail(url=g['icon'])
     return embed
 
@@ -237,16 +252,16 @@ def alliance(guilds):
         value='\n'.join([
             'ID: {}'.format(guilds[0]['id']),
             'Alliance leader: <@{}>'.format(guilds[0]['leader']),
-            'Bank: ${}'.format(intcomma(guilds[0]['money']))
+            'Bank: ${:,d}'.format(guilds[0]['money'])
         ])
-    ).set_footer(text='Total money in bank: ${}'.format(intcomma(sum(i['money'] for i in guilds))))
+    ).set_footer(text='Total money in bank: ${:,d}'.format(sum(i['money'] for i in guilds)))
     for i in guilds[1:]:
         embed.add_field(
             name=discord.utils.escape_markdown(i['name']),
             value='\n'.join([
                 'ID: {}'.format(i['id']),
                 'Guild leader: <@{}>'.format(i['leader']),
-                'Bank: ${}'.format(intcomma(i['money']))
+                'Bank: ${:,d}'.format(i['money'])
             ])
         )
     return embed
@@ -263,11 +278,9 @@ def pet(p):
         timestamp=datetime.datetime.now(datetime.timezone.utc)
     ).set_thumbnail(
         url=p['image']
-    ).set_author(
-        name='Last update: {} ago.'.format(
-            naturaldelta(
-                datetime.datetime.now(datetime.timezone.utc) - datetime.datetime.fromisoformat(p['last_update'][:23] + p['last_update'][-6:])
-            )
+    ).add_field(
+        name='Last updated', value='<t:{:.0f}:R>'.format(
+            datetime.datetime.fromisoformat(p['last_update'][:23] + p['last_update'][-6:]).timestamp()
         )
     )
 

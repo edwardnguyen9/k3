@@ -1,12 +1,13 @@
-import discord, random, datetime, json, asyncio
+import discord, random, datetime, json, asyncio, math, matplotlib.pyplot as plt, os
 from discord import app_commands
 from discord.ext import commands
 from typing import Union, Optional, Literal
 from humanize import intcomma, precisedelta
 from io import BytesIO
 from pprint import pformat
+from decimal import Decimal
 
-from bot.assets import api, postgres  # type: ignore
+from bot.assets import idle, postgres  # type: ignore
 from bot.classes.bot import Kiddo
 from bot.classes.profile import Profile
 from bot.classes.paginator import Paginator  # type: ignore
@@ -386,28 +387,6 @@ class Info(commands.Cog):
         '''
         await self._get_alliance(interaction, aid)
     
-    @commands.command(
-        name='funds',
-        aliases=['fund'],
-        brief='Get guild fund',
-        description='Get all cash and crates of a guild\'s members',
-        usage='<guild ID>',
-        help='> <guild ID>: The ID of the guild.'
-    )
-    async def _fund(self, ctx: commands.Context, gid: int):
-        await self._get_fund(ctx, gid)
-
-    @app_commands.describe(gid='Guild ID')
-    @app_commands.rename(gid='id')
-    @app_commands.command(name='funds')
-    async def _app_fund(
-        self, interaction: discord.Interaction, gid: app_commands.Range[int, 0],
-    ):
-        '''
-        Get guild funds
-        '''
-        await self._get_fund(interaction, gid)
-
     @app_commands.describe(
         name='Included in pet name', user='Pet owner',
         limit='Max number of pets to fetch', sort='Results order', reverse='Reverse order',
@@ -547,7 +526,7 @@ class Info(commands.Cog):
         Get loot item info
         '''
         if user is None and imin is None and imax is None and not ex:
-            res = [l for l in api.loot if vmin <= l[1] <= vmax and (name is None or name.lower() in l[0].lower())]
+            res = [l for l in idle.loot if vmin <= l[1] <= vmax and (name is None or name.lower() in l[0].lower())]
             if len(res) == 0: return await interaction.followup.send('No loot item found.')
             if 'value' in sort:
                 res.sort(key = lambda x: x[0])
@@ -709,7 +688,167 @@ class Info(commands.Cog):
     @app_commands.describe(query='The query to send to IdleRPG API')
     @app_commands.command(name='query')
     async def _app_query(self, interaction: discord.Interaction, query: Optional[str] = ''):
+        '''
+        Send a query to IdleRPG API
+        '''
         await self._get_query(interaction, query or '')
+
+    @app_commands.choices(
+        god=[
+            app_commands.Choice(value=idle.luck_label[i+1], name=idle.luck_options[i]) for i in range(len(idle.luck_options))
+        ]
+    )
+    @app_commands.command(name='luck')
+    async def _app_luck(self, interaction: discord.Interaction, god: Optional[str] = None, limit: Optional[app_commands.Range[int, 10]] = None):
+        await interaction.response.defer(thinking=True)
+        if god is None:
+            data = await utils.get_luck(self.bot, 0 if limit is None else limit)
+            avg = []
+            range_and_current = []
+            timestamp = datetime.datetime.now(datetime.timezone.utc)
+            for i in range(len(idle.luck_range)):
+                range_and_current.append([idle.luck_options[i], idle.luck_range[i], data[0][i+1]])
+                time = [entry[0] for entry in data if entry[i+1] >= 0]
+                vals = [entry[i+1] for entry in data if entry[i+1] >= 0]
+                total = []
+                for k, v in enumerate(vals):
+                    if k != 0:
+                        total.append(v * Decimal(time[k-1] - time[k]))
+                    else:
+                        total.append(v * Decimal(timestamp.timestamp() - time[k]))
+                average = Decimal(sum(total) / Decimal(timestamp.timestamp()-time[-1]))
+                avg.append([idle.luck_options[i], average, Decimal((average - Decimal(1)) / idle.luck_range[i])])
+            range_and_current.sort(key=lambda x: x[2], reverse=True)
+            avg.sort(key=lambda x: x[1], reverse=True)
+            description = 'God\'s luck\n```\n{luck}```\nGod\'s average luck\n```\n{avg}```'.format(
+                luck='\n'.join(['{0:12}: 1 ± {1:.2f} | Current: {2:.2f}'.format(*i) for i in range_and_current]),
+                avg='\n'.join(['{0:12}: {1:.3f} ({2:=+7.2%})'.format(*i) for i in avg])
+            )
+            embed = discord.Embed(
+                title='Luck statistics',
+                description=description,
+                color=random.getrandbits(24),
+                timestamp=timestamp
+            ).add_field(
+                name='Last luck update', value=f'<t:{data[0][0]}:f>'
+            ).add_field(
+                name='First luck update', value='<t:1591006380:f>'
+            ).set_footer(text=interaction.user.name, icon_url=interaction.user.display_avatar.url)
+            await interaction.followup.send(embed=embed)
+        else:
+            if limit is None: limit = 10
+            index = idle.luck_label.index(god)
+            data = await utils.get_luck(self.bot, limit)
+            time = [i[0] for i in data if i[index] >= 0]
+            vals = [i[index] for i in data if i[index] >= 0]
+            url = await self.bot.redis.get(f'chart:{god}:{len(vals)}')
+            if url is None:
+                font = {
+                    'family': 'serif',
+                    'color':  'darkred',
+                    'weight': 'normal',
+                    'size': 24,
+                }
+                font2 = {
+                    'family': 'serif',
+                    'color':  'green',
+                    'weight': 'normal',
+                    'size': 10,
+                }
+                avg_msg = []
+                isnow = datetime.datetime.now(datetime.timezone.utc)
+                ts = isnow.timestamp()
+                week = datetime.timedelta(days=7).total_seconds()
+                mon = isnow.replace(hour=0, minute=0, second=0) - datetime.timedelta(days=isnow.weekday())
+                xes = [(ts-i)/week for i in time]
+                width = (ts - time[-1])/week
+                gap = (ts - mon.timestamp()) / week
+                if round(width) == math.floor(width): width = math.ceil(width)
+                else: width = math.ceil(width) + 0.5
+                avg_msg.append(
+                    '{:d} weeks in total'.format(math.floor((ts - time[-1])/week))
+                )
+                plt.figure(figsize=(width-2, 8), dpi=80).patch.set_facecolor('#bdbdbd')
+                axis = plt.gca()
+                axis.set_ylim([0,2])
+                axis.set_xlim([width,-0.5])
+                axis.axes.get_xaxis().set_visible(False)
+                axis.set_facecolor('#bdbdbd')
+                for i in range(-1, math.ceil(width)):
+                    if i + gap > -0.5:
+                        plt.plot([i + gap, i + gap], [0, 2], color='white', lw=0.3, ls=':')
+                plt.plot([-0.5, width], [Decimal(1) + idle.luck_range[index-1], Decimal(1) + idle.luck_range[index-1]], color='red', lw=0.1)
+                plt.plot([-0.5, width], [Decimal(1) - idle.luck_range[index-1], Decimal(1) - idle.luck_range[index-1]], color='red', lw=0.1)
+                plt.plot([-0.5, width], [1, 1], color='blue', lw=0.1)
+                total = []
+                for k, v in enumerate(vals):
+                    if k != 0:
+                        total.append(v * Decimal(xes[k] - xes[k-1]))
+                    else:
+                        total.append(v * Decimal(xes[k]))
+                average = Decimal(sum(total) / Decimal(xes[-1]))
+                plt.plot([-0.5, width], [average, average], color='green', lw=0.3)
+                plt.plot([0] + xes, [vals[0]] + vals, drawstyle='steps')
+                for x, y in zip(xes, vals):
+                    label = '{:.2f}'.format(y)
+                    offsety = 8 if (x != xes[-1] and vals[xes.index(x)+1] < y) or (x == xes[-1] and vals[-1] < 1) else -13
+                    offsetx = (x - xes[xes.index(x)-1])/2 if x != xes[0] else x/2
+                    plt.annotate(label, (x-offsetx,y), textcoords='offset points', xytext=(0, offsety), ha='center', bbox=dict(boxstyle="round", fc="w", lw=1, alpha=0.8))
+                avg_msg.insert(0, f'Average: {average:.3f}')
+                plt.text(width, -0.1, '\n'.join(avg_msg), horizontalalignment='left', verticalalignment='top', fontdict=font2)
+                plt.title(f'Last {len(vals)} Luck Values of {idle.luck_options[index-1]}', fontdict=font, pad=10)
+                plt.savefig(fname='luck', bbox_inches='tight', pad_inches=0.5)
+                message = await self.bot.log_event('luck', file=discord.File('luck.png'))
+                os.remove('luck.png')
+                plt.close()
+                await self.bot.redis.set(f'chart:{god}:{len(vals)}', message.attachments[0].url, ex=43200)  # type: ignore
+                url = message.attachments[0].url  # type: ignore
+            time_unix = (await utils.get_luck(self.bot, 1))[0][0]
+            embed = discord.Embed(
+                title=f'{idle.luck_options[index-1]} Luck History',
+                timestamp=datetime.datetime.now(datetime.timezone.utc)
+            ).set_image(url=url).add_field(
+                name='Last luck reroll', value='<t:{0}:F> (<t:{0}:R>)'.format(time_unix)
+            ).add_field(
+                name='First data', value='<t:{0}:F> (<t:{0}:R>)'.format(time[-1])
+            )
+            await interaction.followup.send(embed=embed)
+
+    @commands.command(
+        name='gvg',
+        brief='Get guild\'s top 20 GvG members',
+        description='Get 20 members with the highest PvP stats in a guild',
+        help='''
+        * Guild member data is updated at least once a day
+        '''
+    )
+    async def _gvg(self, ctx):
+        members = []
+        res = await self.bot.pool.fetchval('SELECT guild FROM profile3 WHERE "user"=$1', ctx.author.id)
+        if res is None or res < 1: return await ctx.send('Your data has not been updated.')
+        (res, status) = await self.bot.idle_query(
+            idle.queries['guild'].format(
+                id=res,
+                custom=','.join(['race', 'class', 'atkmultiply', 'defmultiply', 'guild'])
+            ),
+            ctx
+        )
+        if status == 429:
+            raise errors.TooManyRequests(ctx)
+        elif res is None:
+            return await ctx.send('An error has occurred while trying to fetch data from the server.')
+        elif len(res) == 0:
+            return await ctx.send('Guild not found.')
+        else:
+            for i in res:
+                p = await Profile.get_profile(self.bot, data=i)
+                data = p.fighter_data()
+                print(p.user, data[0]+data[1])
+                await p.update_profile(self.bot)
+                members.append([p.user, data[0] + data[1]])
+            members.sort(key=lambda x: x[1], reverse=True)
+            description = ['{stats} - battle nominate {id}'.format(id=u[0], stats=u[1]) for u in members[:20]]
+            return await ctx.send('\n'.join(description))
 
     async def _get_profile(self, ctx: Union[commands.Context, discord.Interaction], user: Union[discord.Member, discord.User], ephemeral: bool = False):
         if isinstance(ctx, discord.Interaction):
@@ -720,7 +859,7 @@ class Info(commands.Cog):
             send_message = ctx
             author = ctx.author
         weapons = await self.bot.pool.fetchval(postgres.queries['fetch_weapons'], user.id) or []
-        (res, status) = await self.bot.idle_query(api.queries['profile'].format(userid=user.id), ctx)
+        (res, status) = await self.bot.idle_query(idle.queries['profile'].format(userid=user.id), ctx)
         if status == 429:
             raise errors.TooManyRequests(ctx)
         elif res is None:
@@ -772,7 +911,7 @@ class Info(commands.Cog):
         else:
             send_message = ctx
             author = ctx.author
-        (res, status) = await self.bot.idle_query(api.queries['item'].format(id=iid), ctx)
+        (res, status) = await self.bot.idle_query(idle.queries['item'].format(id=iid), ctx)
         if status == 429:
             raise errors.TooManyRequests(ctx)
         elif res is None:
@@ -792,28 +931,29 @@ class Info(commands.Cog):
         else:
             send_message = ctx
             author = ctx.author
-        (res, status) = await self.bot.idle_query(api.queries['guild'].format(id=gid), ctx)
+        (res, status) = await self.bot.idle_query(idle.queries['guild'].format(id=gid, custom=','.join(idle.crates)), ctx)
         if status == 429:
             raise errors.TooManyRequests(ctx)
         elif res is None:
             return await send_message.send('An error has occurred while trying to fetch data from the server.')
-        elif len(res) != 1:
+        elif len(res) == 0:
             return await send_message.send('Cannot find the guild with that ID.')
         else:
-            g = res[0]
+            money, crate_count, g, officers = 0, [0, 0, 0, 0, 0, 0], {}, []
+            for i in res:
+                money += i['money']
+                for j in range(6): crate_count[j] += i[idle.crates[j]]
+                if i['guildrank'] == 'Officer': officers.append(i['user'])
+                if i['guild_leader_fkey']: g = i['guild_leader_fkey'][0]
             update_guild = {
                 str(g['id']): json.dumps([g['name'], g['leader'], g['alliance']['id']])
             }
             if g['id'] != g['alliance']['id']:
+                i = g['alliance']
+                self.bot.idle_guilds[str(i['id'])] = [i['name'], i['leader'], i['alliance']]
                 update_guild[str(g['alliance']['id'])] = json.dumps([g['alliance']['name'], g['alliance']['leader'], g['alliance']['id']])
             if len(update_guild) > 0: await self.bot.redis.hset('guilds', mapping=update_guild)  # type: ignore
-            (res2, status) = await self.bot.idle_query(api.queries['guildrank'].format(id=gid), ctx, 1)
-            if status == 429 or not res2 or 'user' not in res2[0]:
-                mcount, ocount = None, None
-            else:
-                officers = [i for i in res2 if i['guildrank'] == 'Officer']
-                mcount, ocount = len(res2), len(officers)
-            embed = embeds.guild(res[0], mcount, ocount)
+            embed = embeds.guild(g, len(res), officers, [money] + crate_count, [self.bot.crates, 'c', 'u', 'r', 'm', 'l', 'my'])
             embed.set_footer(text=(embed.footer.text or author.name), icon_url=author.display_avatar.url)
             return await send_message.send(embed=embed)
 
@@ -825,7 +965,8 @@ class Info(commands.Cog):
         else:
             send_message = ctx
             author = ctx.author
-        (res, status) = await self.bot.idle_query(api.queries['alliance'].format(id=aid), ctx)
+        alliance = self.bot.idle_guilds[str(aid)][2] if str(aid) in self.bot.idle_guilds and len(self.bot.idle_guilds[str(aid)]) == 3 else aid
+        (res, status) = await self.bot.idle_query(idle.queries['alliance'].format(gid=aid, aid=alliance), ctx)
         if status == 429:
             raise errors.TooManyRequests(ctx)
         elif res is None:
@@ -833,11 +974,19 @@ class Info(commands.Cog):
         elif len(res) == 0:
             return await send_message.send('Cannot find the guild with that ID.')
         elif len(res) == 1 and res[0]['id'] != res[0]['alliance']:
-            (res, status) = await self.bot.idle_query(api.queries['alliance'].format(id=res[0]['alliance']), ctx)
+            (res, status) = await self.bot.idle_query(idle.queries['alliance'].format(gid=res[0]['alliance'], aid=res[0]['alliance']), ctx)
             if status == 429:
                 raise errors.TooManyRequests(ctx)
             elif not res or len(res) == 0:
                 return await send_message.send('An error has occurred while trying to fetch data from the server.')
+        else:
+            g = discord.utils.find(lambda x: x['id'] == aid, res)
+            if g is not None and g['alliance'] != int(alliance):
+                (res, status) = await self.bot.idle_query(idle.queries['alliance'].format(gid=g['alliance'], aid=g['alliance']), ctx)
+                if status == 429:
+                    raise errors.TooManyRequests(ctx)
+                elif not res or len(res) == 0:
+                    return await send_message.send('An error has occurred while trying to fetch data from the server.')
         guilds = []
         update_guild = {}
         for i in res:
@@ -850,49 +999,6 @@ class Info(commands.Cog):
         embed.set_footer(text=(embed.footer.text or author.name), icon_url=author.display_avatar.url)
         return await send_message.send(embed=embed)
 
-    async def _get_fund(self, ctx: Union[commands.Context, discord.Interaction], gid: int):
-        if isinstance(ctx, discord.Interaction):
-            await ctx.response.defer(thinking=True)
-            send_message = ctx.followup
-            author = ctx.user
-        else:
-            send_message = ctx
-            author = ctx.author
-        (res, status) = await self.bot.idle_query(api.queries['funds'].format(id=gid, crates=','.join(api.crates)), ctx)
-        if status == 429:
-            raise errors.TooManyRequests(ctx)
-        elif res is None:
-            return await send_message.send('An error has occurred while trying to fetch data from the server.')
-        elif len(res) == 0:
-            return await send_message.send('Cannot find the guild with that ID.')
-        else:
-            money, crate_count, guild = 0, [0, 0, 0, 0, 0, 0], {}
-            for i in res:
-                money += i['money']
-                for j in range(6): crate_count[j] += i[api.crates[j]]
-                if i['guild_leader_fkey']: guild = i['guild_leader_fkey'][0]
-            await self.bot.redis.hset('guilds', str(gid), json.dumps([guild['name'], guild['leader'], guild['alliance']]))
-            crates = ['c', 'u', 'r', 'm', 'l', 'my']
-            embed = discord.Embed(
-                title='{}\'s total funds'.format(discord.utils.escape_markdown(guild['name'])),
-                color=random.getrandbits(24),
-                timestamp=datetime.datetime.now(datetime.timezone.utc)
-            ).add_field(
-                name='**Money**',
-                value='**In guild bank**\n${}\n**In member\'s accounts**\n${}\n**Total**\n${}'.format(
-                    intcomma(guild['money']), intcomma(money), intcomma(guild['money'] + money)
-                ),
-                inline=True
-            ).add_field(
-                name='**Crates**',
-                value='\n'.join(map(
-                    lambda x: '{} {:,d}'.format(self.bot.crates[crates[x]], crate_count[x]),
-                    range(len(crates))
-                )),
-                inline=True
-            ).set_footer(text='Does not take into account: loot items, weapons, or alts', icon_url=author.display_avatar.url)
-            await send_message.send(embed=embed)
-
     async def _get_query(self, ctx: Union[commands.Context, discord.Interaction], query: str):
         if isinstance(ctx, discord.Interaction):
             await ctx.response.defer(thinking=True)
@@ -901,7 +1007,7 @@ class Info(commands.Cog):
         else:
             send_message = ctx
             author = ctx.author
-        if len(query) > 0 and query.startswith(api.QUERY_PREFIX): query = query[len(api.QUERY_PREFIX):]
+        if len(query) > 0 and query.startswith(idle.QUERY_PREFIX): query = query[len(idle.QUERY_PREFIX):]
         (res, status) = await self.bot.idle_query(query, ctx)
         if status == 429:
             raise errors.TooManyRequests(ctx)
@@ -945,12 +1051,10 @@ class Info(commands.Cog):
                     update_guild = {}
                     for i in res:
                         if str(i['id']) not in update_guild:
-                            self.bot.idle_guilds[str(i['id'])] = [i['name'], i['leader'], i['alliance']['id']]
-                            update_guild[str(i['id'])] = json.dumps([i['name'], i['leader'], i['alliance']['id']])
-                        if i['id'] != i['alliance']['id'] and str(i['alliance']['id']) not in update_guild:
-                            self.bot.idle_guilds[str(i['alliance']['id'])] = [i['alliance']['name'], i['alliance']['leader'], i['alliance']['id']]
-                            update_guild[str(i['alliance']['id'])] = json.dumps([i['alliance']['name'], i['alliance']['leader'], i['alliance']['id']])
-                        if len(update_guild) > 0: await self.bot.redis.hset('guilds', mapping=update_guild)
+                            self.bot.idle_guilds[str(i['id'])] = [i['name'], i['leader'], i['alliance']]
+                            update_guild[str(i['id'])] = json.dumps([i['name'], i['leader'], i['alliance']])
+                        if len(update_guild) > 0:
+                            await self.bot.redis.hset('guilds', mapping=update_guild)
                         embed = embeds.guild(res[0])
                         embed.set_footer(text=(embed.footer.text or author.name), icon_url=author.display_avatar.url)
                         pages.append(embed)
@@ -1021,9 +1125,9 @@ class Info(commands.Cog):
             user = ctx.author
         if target is None:
             level_table = []
-            for i in range(0, len(api.levels)):
+            for i in range(0, len(idle.levels)):
                 level_table += [
-                    'Level {}'.format((i+1)).ljust(12) + ('Beginner' if i == 0 else intcomma(api.levels[i])).rjust(12)
+                    'Level {}'.format((i+1)).ljust(12) + ('Beginner' if i == 0 else intcomma(idle.levels[i])).rjust(12)
                 ]
             p = Paginator(
                 title='Level table',
@@ -1035,7 +1139,7 @@ class Info(commands.Cog):
             return await p.paginate(ctx)
         elif isinstance(target, (discord.Member, discord.User)):
             user = target
-            (res, status) = await self.bot.idle_query(api.queries['xp'].format(id=user.id), ctx)
+            (res, status) = await self.bot.idle_query(idle.queries['xp'].format(id=user.id), ctx)
             if status == 429:
                 raise errors.TooManyRequests(ctx)
             elif status != 200 or res is None:
@@ -1114,7 +1218,7 @@ class Info(commands.Cog):
                         ', '.join(map(lambda x: f'{x}', chance[0][i:i+5])) for i in range(0,len(chance[0]), 5)
                     ])
                     embed = discord.Embed(
-                        title='Adventure {} - {}'.format(level, api.adventures[level - 1]),
+                        title='Adventure {} - {}'.format(level, idle.adventures[level - 1]),
                         description=(
                             f'For the adventure to succeed, a random number between `[0, 100]` '
                             f'picked by the bot has to be less than or equal to one of these numbers:'
@@ -1136,7 +1240,7 @@ class Info(commands.Cog):
                     return await send_message.send(embed=embed)
                 else:
                     embed = discord.Embed(
-                        title='Adventure {} - {}'.format(level, api.adventures[level - 1]),
+                        title='Adventure {} - {}'.format(level, idle.adventures[level - 1]),
                         description='The bot might crash if you attempt to finish this adventure while your luck is 0.0',
                         color=random.getrandbits(24),
                         timestamp=datetime.datetime.now(datetime.timezone.utc)
@@ -1153,11 +1257,11 @@ class Info(commands.Cog):
                     return await send_message.send(embed=embed)
             else:
                 all_adventures = []
-                for i in range(len(api.adventures)):
+                for i in range(len(idle.adventures)):
                     c = calcchance(i+1)
                     if c is not None: all_adventures += [
                         '\n'.join([
-                            '**Adventure {}** - {}'.format(i+1, api.adventures[i]),
+                            '**Adventure {}** - {}'.format(i+1, idle.adventures[i]),
                             'Duration: *{}*'.format(precisedelta(datetime.timedelta(hours=(i+1) * (1 - building / 100)), suppress=['days'])),
                             'Success range: *{}% - {}%*'.format(min(c[0]), max(c[0])),
                             'Success chance: {}%'.format(c[1]),
@@ -1192,9 +1296,9 @@ class Info(commands.Cog):
                 await pag.paginate(ctx)
         else:
             all_adventures = []
-            for i in range(len(api.adventures)):
+            for i in range(len(idle.adventures)):
                 all_adventures += ['\n'.join([
-                    '**Adventure {}** - {}'.format(i+1, api.adventures[i]),
+                    '**Adventure {}** - {}'.format(i+1, idle.adventures[i]),
                     'Duration: *{}*'.format(precisedelta(datetime.timedelta(hours=(i+1) * (1 - building / 100)), suppress=['days'])),
                     '',
                 ])]
