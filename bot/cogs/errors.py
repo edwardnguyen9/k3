@@ -16,16 +16,15 @@ class ErrorHandler(commands.Cog, name='Error Handler'):
         if self.is_first_ready:
             print(self.__class__.__name__, 'is ready')
             self.is_first_ready = False
+            self.bot.tree.on_error = self.on_command_error
+            # self.bot.on_error = self.on_command_error
+
+    # @commands.Cog.listener()
+    # async def on_app_command_error(self, interaction, error):
+    #     await self.on_command_error(interaction, error)
 
     @commands.Cog.listener()
-    async def on_command_error(self, ctx, error):
-        print(
-            "Error while using this command!\n\n**{0}**: {1}\n{2}".format(
-                type(error).__name__,
-                error,
-                "\n".join([x for x in traceback.format_tb(error.__traceback__)]),
-            )
-        )
+    async def on_command_error(self, interaction, error):
         if isinstance(error, commands.CommandNotFound):
             return
 
@@ -35,7 +34,7 @@ class ErrorHandler(commands.Cog, name='Error Handler'):
             if error.status and int(status) != error.status:
                 await self.bot.redis.set('idle-api', status, ex=900)
             await self.send_error_message(
-                ctx,
+                interaction,
                 f'The API is currently unavailable (Error Code: {status}). Please try again in {precisedelta(cd)}.'
             )
 
@@ -43,10 +42,10 @@ class ErrorHandler(commands.Cog, name='Error Handler'):
             await self.send_error_message(error.context, str(error))
         
         elif isinstance(error, commands.NotOwner):
-            await self.send_error_message(ctx, 'You are not the boss of me.')
+            await self.send_error_message(interaction, 'You are not the boss of me.')
 
         elif isinstance(error, (app_commands.CommandInvokeError, commands.CommandInvokeError, commands.BadArgument, ValueError)):
-            await self.send_error_message(ctx, str(error))
+            await self.send_error_message(interaction, str(error))
 
         else:
             try:
@@ -59,7 +58,7 @@ class ErrorHandler(commands.Cog, name='Error Handler'):
                         "\n".join([x for x in traceback.format_tb(error.__traceback__)]),
                     )
                 )
-            return await ctx.channel.send(f'!{type(error).__name__}: {error}')
+            return await self.send_error_message(interaction, f'!{type(error).__name__}: {error}')
 
     async def send_error_message(self, ctx, error):
         

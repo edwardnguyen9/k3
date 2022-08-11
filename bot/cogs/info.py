@@ -855,6 +855,66 @@ class Info(commands.Cog):
             description = ['{stats} - battle nominate {id}'.format(id=u[0].user, stats=u[1]) for u in members[:20]]
             return await ctx.send('\n'.join(description))
 
+    @app_commands.describe(
+        imin='Min ID of item', imax='Max ID of item', name='Included in item name', user='Item owner (default to command user)',
+        smin='Min stat', smax='Max stat', vmin='Min value', vmax='Max value', wtype='Weapon type',
+        hand='Hand used', ex='Excluding weapons', limit='Max number of weapons to fetch',
+        trade='Get command for trade instead of merch (default to True)'
+    )
+    @app_commands.rename(
+        user='owner', smax='max_stat', smin='min_stat', wtype='type', imin='min_id', imax='max_id', vmin='min_value', vmax='max_value', ex='exclude', trade='for_trade'
+    )
+    @app_commands.command(name='trademerch')
+    async def _app_trademerch(
+        self, interaction: discord.Interaction, user: Optional[discord.User] = None,
+        smax: Optional[app_commands.Range[int, 0, 101]] = None, smin: Optional[app_commands.Range[int, 0, 101]] = None,
+        wtype: Optional[str] = None, hand: Optional[str] = None, name: Optional[str] = None,
+        imax: Optional[app_commands.Range[int, 0]] = None, imin: Optional[app_commands.Range[int, 0]] = None,
+        vmax: Optional[app_commands.Range[int, 0]] = None, vmin: Optional[app_commands.Range[int, 0]] = None, ex: Optional[str] = None,
+        limit: app_commands.Range[int, 1, 250] = 250, trade: bool = True
+    ):
+        await interaction.response.defer(thinking=True)
+        owner = user or interaction.user
+        protected = await self.bot.pool.fetchval(postgres.queries['viewfav'], owner.id) or []
+        if ex: protected += [int(i) for i in ex.split()]  # type: ignore
+        query = queries.items(
+            imin, imax, name, owner, smin, smax, vmin, vmax, wtype, None, hand, None, None, list(set(protected)), limit, 'id.desc', False  # type: ignore
+        ) + '&select=id,value,inventory(equipped),market(price)&inventory.equipped=is.false'
+        (res, status) = await self.bot.idle_query(query, interaction)
+        if status == 429:
+            raise errors.TooManyRequests(interaction)
+        elif res is None:
+            return await interaction.followup.send('An error has occurred while trying to fetch data from the server.')
+        elif len(res) == 0:
+            return await interaction.followup.send('No item found.')
+        else:
+            total = 0
+            messages = []
+            prefix = '$trade add items' if trade else '$merch'
+            msg_lim = 30 if trade else 125
+            items = []
+            for i in res:
+                if i['inventory'] and not i['market']:
+                    total += i['value']
+                    items.append(i['id'])
+            pages = utils.pager(items, msg_lim, True)
+            for i in pages:
+                messages.append(
+                    '{} {}'.format(
+                        prefix, ' '.join(map(str, i))
+                    )
+                )
+            msg_lim = 5 if trade else 1
+            await interaction.followup.send(
+                'Total: {} items (removed {} item{})\nMerch value at 1x: ${:,d}\nThe other messages will be deleted after 2 minutes.'.format(
+                    t:=len(items), r:=len(res)-len(items), '' if r == 1 else 's', total
+                )
+            )
+            for i in range(0, len(messages), msg_lim):
+                msg = await interaction.followup.send('```\n{}```'.format('\n\n'.join(messages[i:i+msg_lim])), wait=True)
+                await msg.delete(delay=120)
+
+
     async def _get_profile(self, ctx: Union[commands.Context, discord.Interaction], user: Union[discord.Member, discord.User], ephemeral: bool = False):
         if isinstance(ctx, discord.Interaction):
             await ctx.response.defer(thinking=True, ephemeral=ephemeral)

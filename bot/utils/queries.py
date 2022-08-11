@@ -110,7 +110,7 @@ def items(
     if ex:
         if isinstance(ex, str):
             ex = [i for i in ex.replace(',', ' ').split() if i.isdecimal()]
-        query += '&id=not.in.({})'.format(','.join(ex))
+        query += '&id=not.in.({})'.format(','.join(map(str, ex)))
     return query
 
 def pets(
