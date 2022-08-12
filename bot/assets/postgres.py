@@ -9,5 +9,8 @@ queries = {
     'fetch_profile':    'SELECT race, classes, weapon, raidstats FROM profile3 WHERE uid=$1',
     'fetch_guild':      'SELECT guild FROM profile3 WHERE uid=$1',
     # Favorite
-    'viewfav': 'SELECT protected FROM items WHERE "user"=$1',
+    'view_fav':     'SELECT protected FROM protected WHERE uid=$1',
+    'update_fav':   'INSERT INTO protected (uid, protected) VALUES ($1, $2) ON CONFLICT (uid) DO UPDATE SET protected=$2;',
+    # Activity
+    'get_activity': 'SELECT (xp, adv, at) FROM profile3 WHERE uid=$1',
 }

@@ -2,7 +2,7 @@ import discord
 from discord.ext import commands
 from typing import Optional
 
-from bot.assets import idle
+from bot.assets import idle  # type: ignore
 
 # Profile
 
@@ -35,6 +35,11 @@ async def auto_god(interaction: discord.Interaction, current: str) -> list[disco
 async def auto_type(interaction: discord.Interaction, current: str) -> list[discord.app_commands.Choice[str]]:  # type: ignore
     return [
         discord.app_commands.Choice(name=i, value=i) for i in idle.weapontypes if current.lower() in i.lower()
+    ]
+
+async def auto_market_type(interaction: discord.Interaction, current: str) -> list[discord.app_commands.Choice[str]]:  # type: ignore
+    return [
+        discord.app_commands.Choice(name=i, value=i) for i in (idle.weapontypes + ['One-handed', 'Two-handed']) if current.lower() in i.lower()
     ]
 
 async def auto_hand(interaction: discord.Interaction, current: str) -> list[discord.app_commands.Choice[str]]:  # type: ignore

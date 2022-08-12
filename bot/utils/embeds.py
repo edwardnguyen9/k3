@@ -192,12 +192,43 @@ def items(page):
         )
     return embed
 
+def market(page, status = None):
+    title = 'Marketplace'
+    color = 0xffff00 # 0xf59025
+    embed = discord.Embed(
+        title=title,
+        color=color,
+        timestamp=datetime.datetime.now(datetime.timezone.utc)
+    )
+    for item in page:
+        '\n'.join([i for i in [
+            '{stat} {type} - ID: {id} - Price: ${price:,d} - Value: ${value:,d}'.format(
+                stat=item['stat'], type=item['type'], id=item['id'], price=item['price'], value=item['value']
+            ),
+            'Owner: <@{owner}>'.format(owner=item['owner']),
+            'Signature: {sign}'.format(item['signature']) if item['signature'] else None,
+            'Published: <t:{time}:R>'.format(time=item['published']),
+        ] if i is not None])
+        embed.add_field(
+            name=item['name'],
+            value='\n'.join([i for i in [
+                '{stat} {type} - ID: {id} - Price: ${price:,d} - Value: ${value:,d}'.format(
+                    stat=item['stat'], type=item['type'], id=item['id'], price=item['price'], value=item['value']
+                ),
+                'Owner: <@{owner}>'.format(owner=item['owner']),
+                'Signature: {sign}'.format(item['signature']) if item['signature'] else None,
+                'Published: <t:{time}:R>'.format(time=item['published']),
+            ] if i is not None]),
+            inline=False
+        )
+    return embed
+
 # Guild
 
 def guild(g, members: int = 0, officers: list = [], money_data: list = [], crates: list = []):
     if isinstance(g['alliance'], int) and g['alliance'] != g['id']:
         al_info = 'Alliance: {}'.format(g['alliance'])
-    elif g['alliance']['id'] != g['id']:
+    elif isinstance(g['alliance'], dict) and g['alliance']['id'] != g['id']:
         al_info = 'Alliance: {name} ({id})\n Alliance leader: <@{leader}>'.format(
             name=discord.utils.escape_markdown(g['alliance']['name']), id=g['alliance']['id'], leader=g['alliance']['leader']
         )

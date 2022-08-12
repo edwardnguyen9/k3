@@ -64,7 +64,10 @@ def guilds(
     if reverse:
         if '.desc' in sort: sort.replace('.desc', '.asc')
         else: sort.replace('.asc', '.desc')
-    query = 'guild?limit={}&order={}'.format(limit, sort)
+    query = 'guild?select={}&limit={}&order={}'.format(
+        'badge,badges,banklimit,channel,description,icon,id,leader,memberlimit,money,name,upgrade,wins,alliance(*)',
+        limit, sort
+    )
     if name: query += '&name=plfts.{}'.format(quote(name))
     if user: query += '&leader=eq.{}'.format(user.id)
     if mlim: query += '&memberlimit=eq.{}'.format(mlim)
@@ -150,9 +153,25 @@ def loot(
     if reverse:
         if '.desc' in sort: sort.replace('.desc', '.asc')
         else: sort.replace('.asc', '.desc')
-    query = idle.QUERY_PREFIX + 'loot?limit={}&order={}'.format(limit if 0 < limit < 250 else 250, sort)
+    query = 'loot?limit={}&order={}'.format(limit if 0 < limit < 250 else 250, sort)
     if name: query += '&name=plfts.{}'.format(quote(name))
     if user: query += '&user=eq.{}'.format(user.id)
     query += minmax('id', imin, imax)
     query += minmax('value', vmin, vmax)
+    return query
+
+def market(
+    wtype: str, smin: int, smax: int, pmin: int, pmax: int, iid: str
+) -> str:
+    query = 'market?select=id,price,published,item(*)'
+    query += minmax('price', pmin, pmax)
+    if smin is not None: query += '&or=(item.damage.gte.{0},armor.gte.{0})'.format(smin)
+    if smax is not None: query += '&item.damage=lte.{0}&item.armor=lte.{0}'.format(smax)
+    if wtype is not None:
+        if 'Two' in wtype: query += '&item.hand=eq.both'
+        elif 'One' in wtype: query += '&item.hand=not.eq.both'
+        else: query += '&item.type=in.({})'.format(','.join([i.title() for i in wtype.replace(',',' ').split()]))
+    if isinstance(iid, str):
+        ex = [i for i in iid.replace(',', ' ').split() if i.isdecimal()]
+        query += '&id=not.in.({})'.format(','.join(map(str, ex)))
     return query

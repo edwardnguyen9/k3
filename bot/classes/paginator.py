@@ -191,7 +191,7 @@ class Paginator:
 
     async def stop_controller(self, message):
         try:
-            await message.edit(content='\u200b', embed=None)
+            await message.edit(content=message.content or '\u200b', embed=None)
         except discord.HTTPException as e:
             print(e)
             pass

@@ -1,4 +1,4 @@
-import discord, math, json
+import discord, math, json, datetime
 from typing import Union
 from decimal import Decimal
 
@@ -104,6 +104,9 @@ def get_weapon_bonus(weapons, classes):
 def transmute_class(data):
     return [idle.classes[i] for i in data['class'] if i in idle.classes]
 
+def get_class(data):
+    return [k for k, v in idle.classes.items() if v in data]
+
 def adv_success(profile, level, booster, building):
     a, d, _, _ = profile.fighter_data()
     const = a + d + 75 + building
@@ -120,3 +123,30 @@ async def get_luck(bot, limit = 10):
         i_loaded = json.loads(i.replace('\'', '"'))
         data.append([i_loaded[0], *[Decimal(x) for x in i_loaded[1:]]])
     return data
+
+def get_market_entry(item):
+    res = {}
+    if 'published' in item:
+        res['id'] = item['item']['id']
+        res['name'] = item['item']['name']
+        res['type'] = item['item']['type']
+        res['stat'] = int(item['item']['damage'] + item['item']['armor'])
+        res['value'] = item['item']['value']
+        res['price'] = item['price']
+        res['published'] = int(datetime.datetime.fromisoformat(
+            item['published'][:item['published'].index('.')] + item['published'][item['published'].index('+'):]
+        ).timestamp())
+        res['signature'] = item['item']['signature']
+        res['owner'] = item['item']['owner']
+    else:
+        res['id'] = item['item']
+        res['name'] = item['name']
+        res['type'] = item['type']
+        res['stat'] = int(item['damage'] + item['armor'])
+        res['value'] = item['value']
+        res['price'] = item['price']
+        res['sold'] = int(datetime.datetime.fromisoformat(
+            item['timestamp'][:item['timestamp'].index('.')] + item['timestamp'][item['timestamp'].index('+'):]
+        ).timestamp())
+        res['signature'] = item['signature']
+    return res

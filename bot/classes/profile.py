@@ -7,6 +7,7 @@ MAX_RAID_BUILDING = [2807, 8244, 13992, 6055, 17555, 3960, 20314, 15356, 19599, 
 
 class Profile:
     def __init__(self, *, data = {}, user = None, race = 'Human', classes = [], guild = -1, raidstats = [1,1], xp = 0, completed = 0, deaths = 0, weapons = []):
+        self.name = data['name'] if 'name' in data else ''
         self.user = data['user'] if 'user' in data else user
         self.race = data['race'] if 'race' in data else race
         self.classes = [idle.classes[i] for i in data['class'] if i in idle.classes] if 'class' in data else classes
@@ -60,6 +61,7 @@ class Profile:
             'SELECT race, classes, weapon, guild, raidstats FROM profile3 WHERE uid=$1',
             uid
         )
+        # print(res, data)
         if res:
             p = Profile(
                 user=uid,
@@ -67,7 +69,10 @@ class Profile:
                 classes=[idle.classes[i] for i in data['class'] if i in idle.classes] if 'class' in data else res['classes'],
                 guild=data['guild'] if 'guild' in data else res['guild'],
                 raidstats=[data['atkmultiply'], data['defmultiply']] if 'atkmultiply' in data and 'defmultiply' in data else res['raidstats'],
-                weapons=res['weapon'])
+                weapons=res['weapon'],
+                xp=data['xp'] if 'xp' in data else 0,
+            )
+            p.name=data['name'] if 'name' in data else ''
             p.new = False
         if p is None:
             p = Profile(user=uid, data=data)
