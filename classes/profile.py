@@ -1,7 +1,7 @@
 import discord
 
-from bot.assets import idle, postgres  # type: ignore
-from bot.utils import utils  # type: ignore
+from assets import idle, postgres
+from utils import utils
 
 MAX_RAID_BUILDING = [2807, 8244, 13992, 6055, 17555, 3960, 20314, 15356, 19599, 20120, 20809, 25859]
 

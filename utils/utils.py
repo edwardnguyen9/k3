@@ -2,7 +2,7 @@ import discord, math, json, datetime
 from typing import Union
 from decimal import Decimal
 
-from bot.assets import idle, postgres  # type: ignore
+from assets import idle
 
 def pager(entries, chunk: int, similar_chunk: bool = False):
     if similar_chunk:

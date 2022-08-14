@@ -3,8 +3,8 @@ from discord.ext import commands
 from discord import app_commands
 from humanize import precisedelta
 
-from bot.classes.bot import Kiddo
-from bot.utils import errors
+from bot.bot import Kiddo
+from utils import errors
 
 class ErrorHandler(commands.Cog, name='Error Handler'):
     def __init__(self, bot: Kiddo):

@@ -1,8 +1,8 @@
 import discord, datetime
 from discord.ext import commands
 
-from bot.classes import ui
-from bot.utils import utils  # type: ignore
+from classes import ui
+from utils import utils  # type: ignore
 
 class Test(commands.Cog):
     def __init__(self, bot):

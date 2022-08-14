@@ -2,7 +2,7 @@ import discord
 from discord.ext import commands
 from typing import Optional
 
-from bot.assets import idle  # type: ignore
+from assets import idle
 
 # Profile
 

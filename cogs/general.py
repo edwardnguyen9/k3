@@ -7,11 +7,11 @@ from io import BytesIO
 from pprint import pformat
 from decimal import Decimal
 
-from bot.assets import idle, postgres  # type: ignore
-from bot.classes.bot import Kiddo
-from bot.classes.profile import Profile
-from bot.classes.paginator import Paginator  # type: ignore
-from bot.utils import command_config as config, errors, utils, embeds, queries  # type: ignore
+from assets import idle, postgres
+from bot.bot import Kiddo
+from classes.profile import Profile
+from classes.paginator import Paginator
+from utils import command_config as config, errors, utils, embeds, queries
 
 
 class General(commands.Cog):
@@ -1584,14 +1584,14 @@ class General(commands.Cog):
             embed.add_field(
                 name='To {}'.format('next evolution' if lvl > 11 else 'second class'),
                 value='{} XP\n{} lv1 adv (375 XP/adv)\n{} days (48 a1s/day)'.format(
-                    intcomma(a := utils.getnextevol(value)), intcomma(b:= a / 375, 2), intcomma(b / 48, 2)
+                    intcomma(a := utils.getnextevol(value)), intcomma(b:= a / 375, 2), intcomma(b / 48, 2) # type: ignore
                 )
             )
         if lvl < 29:
             embed.insert_field_at(0,
                 name='To next level',
                 value='{} XP\n{} lv1 adv (375 XP/adv)\n{} days (48 a1s/day)'.format(
-                    intcomma(a := utils.getnextlevel(value)), intcomma(b:= a / 375, 2), intcomma(b / 48, 2)
+                    intcomma(a := utils.getnextlevel(value)), intcomma(b:= a / 375, 2), intcomma(b / 48, 2) # type: ignore
                 )
             )
         if lvl < 30:

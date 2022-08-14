@@ -8,8 +8,8 @@ from io import BytesIO
 from pprint import pformat
 from dotenv import load_dotenv
 
-from bot.assets import idle, postgres  # type: ignore
-from bot.utils import errors, utils  # type: ignore
+from assets import idle, postgres
+from utils import errors, utils
 
 load_dotenv()
 
@@ -162,7 +162,7 @@ class Kiddo(commands.Bot):
         # Load extensions
         for extension in self.initial_extensions:
             try:
-                await self.load_extension(f'bot.cogs.{extension}')
+                await self.load_extension(f'cogs.{extension}')
                 # print(f'{extension.title()} loaded')
             except Exception:
                 print(f'Error loading cog {extension}')

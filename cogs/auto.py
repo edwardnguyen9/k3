@@ -5,9 +5,9 @@ from io import BytesIO
 from pprint import pformat
 from typing import Optional
 
-from bot.classes.bot import Kiddo
-from bot.assets import idle, postgres, config  # type: ignore
-from bot.utils import utils, embeds, errors  # type: ignore
+from bot.bot import Kiddo
+from assets import idle, postgres, config
+from utils import utils, embeds, errors
 
 @app_commands.default_permissions(kick_members=True)
 class Auto(commands.GroupCog, group_name='update'):

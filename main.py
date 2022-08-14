@@ -5,7 +5,7 @@ from aiohttp import ClientSession
 from dotenv import load_dotenv
 
 
-from bot.classes.bot import Kiddo
+from bot.bot import Kiddo
 
 load_dotenv()
 intents = discord.Intents.default()
@@ -17,7 +17,7 @@ async def main():
     
     async with ClientSession() as client, asyncpg.create_pool(os.getenv('DATABASE')) as pool, aioredis.from_url(os.getenv('REDIS'), decode_responses=True) as redis:  # type: ignore
 
-        exts = [f[:-3] for f in os.listdir('bot/cogs') if f.endswith('.py')]
+        exts = [f[:-3] for f in os.listdir('cogs') if f.endswith('.py')]
         PREFIX = os.getenv('DEFAULT_PREFIX', 'bea ')
         LOG_SERVER = int(os.getenv('LOG_SERVER', 0))
         

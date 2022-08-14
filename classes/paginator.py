@@ -1,9 +1,9 @@
-import discord, asyncio, datetime
+import discord, asyncio
 
 from random import getrandbits
 
-from bot.utils.errors import NoEmbedPage
-from bot.utils.utils import pager  # type: ignore
+from utils.errors import NoEmbedPage
+from utils.utils import pager
 
 
 class Paginator:

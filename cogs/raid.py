@@ -2,7 +2,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands, tasks
 
-from bot.assets import raid
+from assets import raid
 
 class Raid(commands.GroupCog, group_name='raid'):
     def __init__(self, bot):

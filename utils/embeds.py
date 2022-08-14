@@ -1,8 +1,8 @@
 import discord, datetime
 from random import getrandbits
 
-from bot.assets import idle  # type: ignore
-from bot.utils import utils  # type: ignore
+from assets import idle
+from utils import utils
 
 # Profile
 

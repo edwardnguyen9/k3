@@ -1,7 +1,6 @@
-import discord
 from urllib.parse import quote
 
-from bot.assets import idle  # type: ignore
+from assets import idle
 
 def minmax(_name, _min, _max):
     temp = []
@@ -11,16 +10,16 @@ def minmax(_name, _min, _max):
     elif len(temp) == 1: return '&{name}={}'.format(name=_name, *temp)
     else: return ''
 
-def query_class(class_tree: str):
+def query_class(class_tree,):
     tree = [k for k, v in idle.classes.items() if v[0] == class_tree]
     return '&class=ov.{' + ','.join(tree) + '}'
 
 def profiles(
-    name: str, lvmin: int, lvmax: int, race: str, classes: str,
-    emin: int, emax: int, ratkmin: float, ratkmax: float, rdefmin: float, rdefmax: float,
-    pvpmin: int, pvpmax: int, spouse: discord.User, lsmin: int, lsmax: int,
-    god: str, luck: float, fmin: int, fmax: int, guild: int,
-    limit: int, sort: str, reverse: bool
+    name, lvmin, lvmax, race, classes,
+    emin, emax, ratkmin, ratkmax, rdefmin, rdefmax,
+    pvpmin, pvpmax, spouse, lsmin, lsmax,
+    god, luck, fmin, fmax, guild,
+    limit, sort, reverse,
 ) -> str:
     if reverse:
         if '.desc' in sort: sort.replace('.desc', '.asc')
@@ -58,8 +57,8 @@ def profiles(
     return query
 
 def guilds(
-    imin: int, imax: int, aimin: int, aimax: int, name: str, user: discord.User, mlim: int, blmin: int, blmax: int,
-    bmin: int, bmax: int, umin: int, umax: int, gmin: int, gmax: int, limit: int, sort: str, reverse: bool
+    imin, imax, aimin, aimax, name, user, mlim, blmin, blmax,
+    bmin, bmax, umin, umax, gmin, gmax, limit, sort, reverse,
 ) -> str:
     if reverse:
         if '.desc' in sort: sort.replace('.desc', '.asc')
@@ -80,8 +79,8 @@ def guilds(
     return query
 
 def items(
-    imin: int, imax: int, name: str, user: discord.User, smin: int, smax: int, vmin: int, vmax: int,
-    wtype: str, otype: str, hand: str, sign: int, mod: int, ex, limit: int, sort: str, reverse: bool
+    imin, imax, name, user, smin, smax, vmin, vmax,
+    wtype, otype, hand, sign, mod, ex, limit, sort, reverse,
 ) -> str:
     if reverse:
         if '.desc' in sort: sort.replace('.desc', '.asc')
@@ -117,8 +116,8 @@ def items(
     return query
 
 def pets(
-    name: str, user: discord.User, fmin: int, fmax: int, dmin: int, dmax: int,
-    jmin: int, jmax: int, lmin: int, lmax: int, limit: int, sort: str, reverse: bool
+    name, user, fmin, fmax, dmin, dmax,
+    jmin, jmax, lmin, lmax, limit, sort, reverse,
 ) -> str:
     if reverse:
         if '.desc' in sort: sort.replace('.desc', '.asc')
@@ -133,7 +132,7 @@ def pets(
     return query
 
 def children(
-    name: str, father: discord.User, mother: discord.User, parent: discord.User, amin: int, amax: int, gender: int, limit: int, sort: str, reverse: bool
+    name, father, mother, parent, amin, amax, gender, limit, sort, reverse,
 ) -> str:
     if reverse:
         if '.desc' in sort: sort.replace('.desc', '.asc')
@@ -148,7 +147,7 @@ def children(
     return query
 
 def loot(
-    user: discord.User, name: str, imin: int, imax: int, vmin: int, vmax: int, limit: int, sort: str, reverse: bool
+    user, name, imin, imax, vmin, vmax, limit, sort, reverse,
 ) -> str:
     if reverse:
         if '.desc' in sort: sort.replace('.desc', '.asc')
@@ -161,7 +160,7 @@ def loot(
     return query
 
 def market(
-    wtype: str, smin: int, smax: int, pmin: int, pmax: int, iid: str
+    wtype, smin, smax, pmin, pmax, iid,
 ) -> str:
     query = 'market?select=id,price,published,item(*)'
     query += minmax('price', pmin, pmax)

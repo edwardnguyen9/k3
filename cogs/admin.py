@@ -3,7 +3,7 @@ from discord.ext import commands
 from io import BytesIO
 from pprint import pformat
 
-from bot.utils import utils  # type: ignore
+from utils import utils  # type: ignore
 
 class Admin(commands.Cog):
     def __init__(self, bot):

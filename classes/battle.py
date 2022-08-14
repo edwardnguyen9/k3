@@ -1,7 +1,7 @@
 import discord, random
 
-from bot.assets import battle  # type: ignore
-from bot.utils import utils  # type: ignore
+from assets import battle
+from utils import utils
 
 class Fighter:
     def __init__(
