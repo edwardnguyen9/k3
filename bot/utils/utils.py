@@ -2,7 +2,7 @@ import discord, math, json, datetime
 from typing import Union
 from decimal import Decimal
 
-from bot.assets import idle  # type: ignore
+from bot.assets import idle, postgres  # type: ignore
 
 def pager(entries, chunk: int, similar_chunk: bool = False):
     if similar_chunk:
@@ -124,16 +124,38 @@ async def get_luck(bot, limit = 10):
         data.append([i_loaded[0], *[Decimal(x) for x in i_loaded[1:]]])
     return data
 
-def get_market_entry(item):
+def get_market_entry(item, trimmed = False):
     res = {}
-    if 'published' in item:
+    if trimmed:
+        res['id'] = item['id']
+        res['name'] = item['name']
+        res['type'] = item['type']
+        res['stat'] = item['stats'] if 'stats' in item else item['stat']
+        res['value'] = item['value']
+        res['price'] = item['price']
+        res['published'] = item['published']
+        res['signature'] = item['signature'] if 'signature' in item else None
+        res['owner'] = item['owner']
+    elif 'owner' in item:
+        res['id'] = item['id']
+        res['name'] = item['name']
+        res['type'] = item['type']
+        res['stat'] = int(item['damage'] + item['armor'])
+        res['value'] = item['value']
+        res['price'] = item['market'][0]['price']
+        res['published'] = res['last_updated'] = int(datetime.datetime.fromisoformat(
+            item['market'][0]['published'][:item['market'][0]['published'].index('.')] + item['market'][0]['published'][item['market'][0]['published'].index('+'):]
+        ).timestamp())
+        res['signature'] = item['signature']
+        res['owner'] = item['owner']
+    elif 'published' in item:
         res['id'] = item['item']['id']
         res['name'] = item['item']['name']
         res['type'] = item['item']['type']
         res['stat'] = int(item['item']['damage'] + item['item']['armor'])
         res['value'] = item['item']['value']
         res['price'] = item['price']
-        res['published'] = int(datetime.datetime.fromisoformat(
+        res['published'] = res['last_updated'] = int(datetime.datetime.fromisoformat(
             item['published'][:item['published'].index('.')] + item['published'][item['published'].index('+'):]
         ).timestamp())
         res['signature'] = item['item']['signature']
@@ -150,3 +172,18 @@ def get_market_entry(item):
         ).timestamp())
         res['signature'] = item['signature']
     return res
+
+def get_role_ids(key: str, cfg: dict):
+    role_list = []
+    if 'misc' in cfg:
+        config = cfg['misc']
+        if key == 'arena':
+            role_list = config['arena:archive'][config['arena']]['titles'] if 'arena' in config else []
+        elif key == 'donation':
+            role_list = config['donation']['tiers'] if 'donation' in config else []
+
+    return sorted(
+        [[i[1], cfg['role'][i[1]], i[0]] for i in role_list],
+        key=lambda x: x[2],
+        reverse=True
+    )

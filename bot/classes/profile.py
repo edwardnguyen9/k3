@@ -1,4 +1,4 @@
-import datetime
+import discord
 
 from bot.assets import idle, postgres  # type: ignore
 from bot.utils import utils  # type: ignore
@@ -7,7 +7,7 @@ MAX_RAID_BUILDING = [2807, 8244, 13992, 6055, 17555, 3960, 20314, 15356, 19599, 
 
 class Profile:
     def __init__(self, *, data = {}, user = None, race = 'Human', classes = [], guild = -1, raidstats = [1,1], xp = 0, completed = 0, deaths = 0, weapons = []):
-        self.name = data['name'] if 'name' in data else ''
+        self.name = data['name'] if 'name' in data else user.name if user else ''
         self.user = data['user'] if 'user' in data else user
         self.race = data['race'] if 'race' in data else race
         self.classes = [idle.classes[i] for i in data['class'] if i in idle.classes] if 'class' in data else classes
@@ -43,14 +43,7 @@ class Profile:
             self.classes,
             self.guild,
             self.raidstats,
-            datetime.datetime.now(datetime.timezone.utc)
-        )
-
-    @staticmethod
-    async def update_adventures(bot, data):
-        await bot.pool.execute(
-            postgres.queries['adv_update'],
-            *data,
+            discord.utils.utcnow()
         )
 
     @staticmethod

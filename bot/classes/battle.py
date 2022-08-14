@@ -1,4 +1,4 @@
-import discord, random, datetime
+import discord, random
 
 from bot.assets import battle  # type: ignore
 from bot.utils import utils  # type: ignore
@@ -77,7 +77,7 @@ class Fighter:
                 'INSERT INTO profile (uid, wt, atk, def, ratk, rdef, guild, uatk, udef, classes)'
                 ' VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10);',
                 self.user.id,
-                datetime.datetime.now(datetime.timezone.utc),
+                discord.utils.utcnow(),
                 self.dmg, self.amr,
                 self.atkm, self.defm,
                 self.guild,
@@ -89,7 +89,7 @@ class Fighter:
                 'UPDATE profile SET wt=$2, atk=$3, def=$4, ratk=$5, rdef=$6, guild=$7, uatk=$8, udef=$9, classes=$10'
                 ' WHERE uid=$1;',
                 self.user.id,
-                datetime.datetime.now(datetime.timezone.utc),
+                discord.utils.utcnow(),
                 self.dmg, self.amr,
                 self.atkm, self.defm,
                 self.guild,

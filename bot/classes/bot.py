@@ -80,7 +80,7 @@ class Kiddo(commands.Bot):
         embed = discord.Embed(
             title=ctx.guild.name if ctx.guild else ctx.author.name,
             color=0x79f2ce,
-            timestamp=datetime.datetime.now(datetime.timezone.utc)
+            timestamp=discord.utils.utcnow()
         ).add_field(
             name='User', value=f'{ctx.author.name} ({ctx.author.mention})', inline=False
         ).add_field(
@@ -109,7 +109,7 @@ class Kiddo(commands.Bot):
                 embed=discord.Embed(
                     title='Autofetch' if not ctx else ctx.command.qualified_name, # type: ignore
                     description=f'```{query} ```',
-                    timestamp=datetime.datetime.now(datetime.timezone.utc),
+                    timestamp=discord.utils.utcnow(),
                     color=0xc77bed if status // 100 == 2 else 0xc91e1e
                 ).add_field(
                     name='Response', value='.'.join([str(i) for i in [status, len(res) if res is not None else None] if i is not None])
@@ -348,14 +348,14 @@ class Kiddo(commands.Bot):
         if len(profile) > 0:
             log_p = [profile['race'], utils.transmute_class(profile), profile['guild'], [profile['atkmultiply'], profile['defmultiply']]]
             log_w = [[str(i['id']), i['type'], str(int(i['damage'] + i['armor'])), i['name']] for i in equipped]
-            to_update = [uid, *log_p, log_w, datetime.datetime.now(datetime.timezone.utc)]
+            to_update = [uid, *log_p, log_w, discord.utils.utcnow()]
             if not manual_update:
                 await self.pool.execute(postgres.queries['update_weapons'], *to_update)
         else: log_p, log_w = [], []
         if orgs:
-            return profile, equipped, to_update if manual_update else None
+            return equipped, profile, to_update if manual_update else None
         else:
-            return log_p, log_w, to_update if manual_update else None
+            return log_w, log_p, to_update if manual_update else None
 
     def _get_prefix(self, bot, message):
         if not message.guild:

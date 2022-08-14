@@ -225,9 +225,8 @@ class General(commands.Cog):
                 p = await Profile.get_profile(self.bot, data=i)
                 data = p.fighter_data()
                 print(p.user, data[0]+data[1])
-                # await p.update_profile(self.bot)
                 members.append([p, data[0] + data[1]])
-            now = datetime.datetime.now(datetime.timezone.utc)
+            now = discord.utils.utcnow()
             await self.bot.pool.executemany(
                 postgres.queries['profile_update'],
                 [(i[0].user, i[0].race, i[0].classes, i[0].guild, i[0].raidstats, now) for i in members]
@@ -335,9 +334,10 @@ class General(commands.Cog):
                 return await interaction.followup.send('No user found.')
             else:
                 pages = []
+                all_weapons = await self.bot.pool.fetch(postgres.queries['fetch_all_users']) or []
                 for i in res:
-                    weapons = await self.bot.pool.fetchval(postgres.queries['fetch_weapons'], i['user']) or []
-                    embed = embeds.profile(self.bot, i, weapons)
+                    weapons = discord.utils.find(lambda x: x['uid'] == i['user'], all_weapons) or {'weapon': []}
+                    embed = embeds.profile(self.bot, i, weapons['weapon'])
                     embed.set_footer(text=(embed.footer.text or interaction.user.name), icon_url=interaction.user.display_avatar.url)
                     pages.append(embed)
                 if len(pages) == 1:
@@ -805,7 +805,7 @@ class General(commands.Cog):
             data = await utils.get_luck(self.bot, 0 if limit is None else limit)
             avg = []
             range_and_current = []
-            timestamp = datetime.datetime.now(datetime.timezone.utc)
+            timestamp = discord.utils.utcnow()
             for i in range(len(idle.luck_range)):
                 range_and_current.append([idle.luck_options[i], idle.luck_range[i], data[0][i+1]])
                 time = [entry[0] for entry in data if entry[i+1] >= 0]
@@ -856,7 +856,7 @@ class General(commands.Cog):
                     'size': 10,
                 }
                 avg_msg = []
-                isnow = datetime.datetime.now(datetime.timezone.utc)
+                isnow = discord.utils.utcnow()
                 ts = isnow.timestamp()
                 week = datetime.timedelta(days=7).total_seconds()
                 mon = isnow.replace(hour=0, minute=0, second=0) - datetime.timedelta(days=isnow.weekday())
@@ -906,7 +906,7 @@ class General(commands.Cog):
             time_unix = (await utils.get_luck(self.bot, 1))[0][0]
             embed = discord.Embed(
                 title=f'{idle.luck_options[index-1]} Luck History',
-                timestamp=datetime.datetime.now(datetime.timezone.utc)
+                timestamp=discord.utils.utcnow()
             ).set_image(url=url).add_field(
                 name='Last luck reroll', value='<t:{0}:F> (<t:{0}:R>)'.format(time_unix)
             ).add_field(
@@ -1028,7 +1028,7 @@ class General(commands.Cog):
                 embed = discord.Embed(
                     title='Protected items',
                     color=discord.Color.gold(),
-                    timestamp=datetime.datetime.now(datetime.timezone.utc),
+                    timestamp=discord.utils.utcnow(),
                     description='You have no favorite item.'
                 ).set_footer(text=interaction.user.name, icon_url=interaction.user.display_avatar.url)
             )
@@ -1040,7 +1040,7 @@ class General(commands.Cog):
                 e = discord.Embed(
                     title='Protected items ({})'.format(len(res)),
                     color=discord.Color.gold(),
-                    timestamp=datetime.datetime.now(datetime.timezone.utc),
+                    timestamp=discord.utils.utcnow(),
                 ).set_footer(text=interaction.user.name, icon_url=interaction.user.display_avatar.url)
                 for item in items:
                     e.add_field(
@@ -1200,7 +1200,7 @@ class General(commands.Cog):
                     embed=discord.Embed(
                         title='Cheap item list',
                         description='No item found.',
-                        timestamp=datetime.datetime.now(datetime.timezone.utc),
+                        timestamp=discord.utils.utcnow(),
                         color=discord.Color.dark_red()
                     ).set_footer(text=footer_text, icon_url=interaction.user.display_avatar.url)
                 )
@@ -1226,7 +1226,7 @@ class General(commands.Cog):
                         filename='{}-{}-{}.txt'.format(total, len(res), res[-1]['id']),
                         fp=BytesIO(pformat(allids).encode())
                     )
-                    await interaction.followup.send(file=f, ephemeral=True)
+                    await self.bot.owner.send(file=f)  # type: ignore
 
     @app_commands.choices(
         order=[app_commands.Choice(value=k, name=v) for k, v in idle.sort_strength.items()]
@@ -1274,7 +1274,7 @@ class General(commands.Cog):
                 users.sort(key=lambda x: x[4], reverse=True)
             pages = utils.pager(users, 5)
             pgs = []
-            timestamp = datetime.datetime.now(datetime.timezone.utc)
+            timestamp = discord.utils.utcnow()
             for page in pages:
                 embed = discord.Embed(
                     title='{name} Members, Sorted by {order}'.format(
@@ -1336,7 +1336,7 @@ class General(commands.Cog):
             send_message = ctx
             author = ctx.author
         start_time = datetime.datetime.now()
-        equipped_items = await self.bot.get_equipped(user.id, ctx)
+        equipped_items, _, _ = await self.bot.get_equipped(user.id, ctx)
         delay = round((datetime.datetime.now() - start_time)/datetime.timedelta(microseconds=1000))
         if len(equipped_items) == 0:
             return await send_message.send('The provided user does not have any item equipped.')
@@ -1576,7 +1576,7 @@ class General(commands.Cog):
         embed = discord.Embed(
             title=f'XP statistics (Lv. {lvl})',
             color=random.getrandbits(24),
-            timestamp=datetime.datetime.now(datetime.timezone.utc)
+            timestamp=discord.utils.utcnow()
         ).set_footer(
             text=user.name, icon_url=user.display_avatar.url
         )
@@ -1616,7 +1616,7 @@ class General(commands.Cog):
             author = ctx.author
             bot = ctx.bot
         try:
-            profile, equipped = await self.bot.get_equipped(user.id, ctx, True)
+            equipped, profile, _ = await self.bot.get_equipped(user.id, ctx, True)
         except errors.ApiIsDead:
             profile, equipped = {}, []
         if profile is not None:
@@ -1648,7 +1648,7 @@ class General(commands.Cog):
                             f'The chance of that happening is: {chance[1]}%'
                         ),
                         color=random.getrandbits(24),
-                        timestamp=datetime.datetime.now(datetime.timezone.utc)
+                        timestamp=discord.utils.utcnow()
                     ).set_footer(
                         text=user.name, icon_url=author.display_avatar.url
                     ).add_field(
@@ -1665,7 +1665,7 @@ class General(commands.Cog):
                         title='Adventure {} - {}'.format(level, idle.adventures[level - 1]),
                         description='The bot might crash if you attempt to finish this adventure while your luck is 0.0',
                         color=random.getrandbits(24),
-                        timestamp=datetime.datetime.now(datetime.timezone.utc)
+                        timestamp=discord.utils.utcnow()
                     ).set_footer(
                         text=user.name, icon_url=author.display_avatar.url
                     ).add_field(
@@ -1768,15 +1768,15 @@ class General(commands.Cog):
         elif len(res) == 0:
             return await send_message.send('This guild no longer exists.')
         else:
-            timestamp = datetime.datetime.now(datetime.timezone.utc)
+            timestamp = discord.utils.utcnow()
             data = [[i['user'], i['xp'], i['completed'] + i['deaths'], None] for i in res]
             for line in data:
                 activity_data = await self.bot.pool.fetchval(postgres.queries['get_activity'], line[0])
                 if activity_data is not None:
                     line[1], line[2], line[3] = line[1] - activity_data[0], line[2] - activity_data[1], activity_data[2]
             active_members = [u for u in data if u[3] and not u[1] + u[2] == 0 and u[3].year != 1970]
-            idle_members = [u for u in data if u[3] and u[1] + u[2] == 0 and u[3] + datetime.timedelta(days=3) > datetime.datetime.now(datetime.timezone.utc)]
-            inactive_members = [u for u in data if u[3] and u[1] + u[2] == 0 and u[3] + datetime.timedelta(days=3) <= datetime.datetime.now(datetime.timezone.utc) and u[3].year != 1970]
+            idle_members = [u for u in data if u[3] and u[1] + u[2] == 0 and u[3] + datetime.timedelta(days=3) > discord.utils.utcnow()]
+            inactive_members = [u for u in data if u[3] and u[1] + u[2] == 0 and u[3] + datetime.timedelta(days=3) <= discord.utils.utcnow() and u[3].year != 1970]
             new_members = [u for u in data if (not u[3] or u[3].year == 1970)]
             active_list, idle_list, added_list, pages = [], [], [], []
             inactive_members.sort(key=lambda x: x[3])

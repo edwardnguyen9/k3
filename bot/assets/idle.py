@@ -11,7 +11,7 @@ crates = ['crates_common', 'crates_uncommon', 'crates_rare', 'crates_magic', 'cr
 queries = {
     # Profile
     'profile':      'profile?user=eq.{userid}',
-    'xp':           'profile?select=xp&user=eq.{id}',
+    'xp':           'profile?select=xp&user=in.({id})',
     'leaderboard':  'profile?user=not.eq.356091260429402122&order={order}',
     # Equipped
     'equip_old':    'allitems?select=*,inventory(equipped),profile(user,race,class,atkmultiply,defmultiply,guild,luck,xp)&owner=eq.{owner}&inventory.equipped=is.true&id=in.({ids})',
@@ -21,12 +21,14 @@ queries = {
     'item':         'allitems?id=eq.{id}&select=*,market(price),inventory(equipped)',
     'fav':          'allitems?select=owner,name,id,armor,damage,type&id=in.({ids})&owner=eq.{uid}',
     # Guild
-    'guild':        'profile?guild=eq.{id}&order=xp.desc&select=guildrank,user,money,{custom},guild_leader_fkey(id,leader,channel,memberlimit,money,banklimit,wins,upgrade,name,description,icon,alliance(*))',
+    'guild':        'profile?guild=in.({id})&order=xp.desc&select=user,name,race,class,xp,atkmultiply,defmultiply,money,crates_common,crates_uncommon,crates_rare,crates_magic,crates_legendary,crates_mystery,guild,guildrank,xp,completed,deaths,guild_leader_fkey(id,leader,channel,memberlimit,money,banklimit,wins,upgrade,name,description,icon,alliance(*))',
     'alliance':     'guild?select=name,id,alliance,leader,description,money&or=(id.eq.{gid},alliance.eq.{aid})',
-    'stats':        'profile?guild=in.({ids})&select=user,name,xp,race,class,atkmultiply,defmultiply&order=xp.desc',
     # Market
     'cheap':    'market?price=lte.{max}&price=gte.{min}&select=id,item,price,allitems(value,damage,armor,type)&order=id.desc{id}',
-    'search':   'market?select=price,published,item(*)'
+    'search':   'market?select=price,published,item(*)',
+    'scan_old':     'allitems?select=*,market(price,published)&id=in.({ids})',
+    'scan_moved':   'market_history?timestamp=gt.{time}&item=in.({ids})&order=id.desc',
+    'scan_new':     'market?select=id,price,published,item(*)&id=gt.{idmax}&order=id',
 }
 
 # Profile consts

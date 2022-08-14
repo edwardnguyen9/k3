@@ -242,7 +242,7 @@ class Paginator:
                             p.set_footer(text=p.footer.text if p.footer else self.footer, icon_url=p.footer.icon_url if p.footer and p.footer.icon_url else author.display_avatar.url)
                     if hasattr(p, 'timestamp'):
                         if not p.timestamp:
-                            p.timestamp = self.timestamp or datetime.datetime.now(datetime.timezone.utc)
+                            p.timestamp = self.timestamp or discord.utils.utcnow()
                     self.pages.append(p)
 
         if self.entries:
@@ -254,7 +254,7 @@ class Paginator:
                 )
                 page.set_footer(text=f'Page {index + 1}/{len(chunks)}', icon_url=author.display_avatar.url)
                 page.description = self.formmater(chunk)
-                page.timestamp = self.timestamp or datetime.datetime.now(datetime.timezone.utc)
+                page.timestamp = self.timestamp or discord.utils.utcnow()
                 if hasattr(self, "footer"):
                     if self.footer:
                         page.set_footer(text=self.footer, icon_url=author.display_avatar.url)

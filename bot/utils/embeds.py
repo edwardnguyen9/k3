@@ -10,7 +10,7 @@ def profile(bot, p, weapons: list = []):
     embed = discord.Embed(
         title=discord.utils.escape_markdown(p['name']),
         color=utils.embedcolor(p['colour']),
-        timestamp=datetime.datetime.now(datetime.timezone.utc)
+        timestamp=discord.utils.utcnow()
     )
     if not p['background'] == '0':
         embed.set_thumbnail(url=p['background'])
@@ -146,7 +146,7 @@ def profile(bot, p, weapons: list = []):
     # elif cache:
     #     embed.set_footer(
     #         text='Weapons last updated: {}'.format(
-    #             naturaltime(cache[2], when=datetime.datetime.now(datetime.timezone.utc))
+    #             naturaltime(cache[2], when=discord.utils.utcnow())
     #         )
     #     )
     return embed
@@ -157,7 +157,7 @@ def items(page):
     embed = discord.Embed(
         title='Weapon crate',
         color=0xb5ffde,
-        timestamp=datetime.datetime.now(datetime.timezone.utc)
+        timestamp=discord.utils.utcnow()
     )
     for item in page:
         hand = ''
@@ -193,31 +193,39 @@ def items(page):
     return embed
 
 def market(page, status = None):
-    title = 'Marketplace'
-    color = 0xffff00 # 0xf59025
+    title = (
+        'Item removed' if status == 'removed'
+        else 'Price changed' if status == 'changed'
+        else 'Item traded' if status == 'moved'
+        else 'Item sold' if status == 'sold'
+        else 'Item deleted' if status == 'deleted'
+        else 'Item added' if status == 'added'
+        else 'Marketplace'
+    )
+    color = 0xff0000 if status in ['removed', 'moved', 'sold'] else 0xf59025 if status == 'changed' else 0xffff00
     embed = discord.Embed(
         title=title,
         color=color,
-        timestamp=datetime.datetime.now(datetime.timezone.utc)
+        timestamp=discord.utils.utcnow()
     )
     for item in page:
-        '\n'.join([i for i in [
-            '{stat} {type} - ID: {id} - Price: ${price:,d} - Value: ${value:,d}'.format(
-                stat=item['stat'], type=item['type'], id=item['id'], price=item['price'], value=item['value']
-            ),
-            'Owner: <@{owner}>'.format(owner=item['owner']),
-            'Signature: {sign}'.format(item['signature']) if item['signature'] else None,
-            'Published: <t:{time}:R>'.format(time=item['published']),
-        ] if i is not None])
         embed.add_field(
             name=item['name'],
             value='\n'.join([i for i in [
-                '{stat} {type} - ID: {id} - Price: ${price:,d} - Value: ${value:,d}'.format(
-                    stat=item['stat'], type=item['type'], id=item['id'], price=item['price'], value=item['value']
+                '{stat} {type} - ID: {id} - Value: ${value:,d}'.format(
+                    stat=item['stat'], type=item['type'], id=item['id'], value=item['value']
                 ),
-                'Owner: <@{owner}>'.format(owner=item['owner']),
+                'Price: {old}${price:,d}'.format(
+                    price=item['price'],
+                    old='' if 'old_price' not in item else '~~${:,d}~~ '.format(item['old_price'])
+                ),
+                'Previous owner: <@{owner}>'.format(owner=item['owner']) if 'current_owner' in item else None,
+                'Owner: <@{owner}>'.format(owner=item['current_owner'] if 'current_owner' in item else item['owner']),
                 'Signature: {sign}'.format(item['signature']) if item['signature'] else None,
                 'Published: <t:{time}:R>'.format(time=item['published']),
+                'Last updated: <t:{time}:R>'.format(time=item['last_updated']) if 'last_updated' in item and item['last_updated'] != item['published'] else None,
+                'Sold: <t:{time}:R>'.format(time=item['sold']) if 'sold' in item else None,
+                '*Item removed.*' if status == 'removed' else '*Item removed.*' if status == 'deleted' else None
             ] if i is not None]),
             inline=False
         )
@@ -250,7 +258,7 @@ def guild(g, members: int = 0, officers: list = [], money_data: list = [], crate
         title=discord.utils.escape_markdown(g['name']),
         description=g['description'],
         color=0xCE71EB,
-        timestamp=datetime.datetime.now(datetime.timezone.utc)
+        timestamp=discord.utils.utcnow()
     ).add_field(
         name='Info',
         value='\n'.join(info)
@@ -277,7 +285,7 @@ def alliance(guilds):
     embed = discord.Embed(
         title='{}\'s alliance'.format(discord.utils.escape_markdown(guilds[0]['name'])),
         color=getrandbits(24),
-        timestamp= datetime.datetime.now(datetime.timezone.utc)
+        timestamp= discord.utils.utcnow()
     ).add_field(
         name=discord.utils.escape_markdown(guilds[0]['name']),
         value='\n'.join([
@@ -306,7 +314,7 @@ def pet(p):
             )
         ),
         color=0xb5ffd8,
-        timestamp=datetime.datetime.now(datetime.timezone.utc)
+        timestamp=discord.utils.utcnow()
     ).set_thumbnail(
         url=p['image']
     ).add_field(
@@ -335,7 +343,7 @@ def loot(page):
     embed = discord.Embed(
         title='Lootbox',
         color=0xeeb5ff,
-        timestamp=datetime.datetime.now(datetime.timezone.utc)
+        timestamp=discord.utils.utcnow()
     )
     for loot in page:
         embed.add_field(
