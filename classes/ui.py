@@ -1,23 +1,52 @@
 import discord, traceback
 
-class Confirm(discord.ui.View):
-    def __init__(self):
-        super().__init__()
+class RaidAnnouncement(discord.ui.View):
+    def __init__(self, confirmed = None, cancelled = None):
+        super().__init__(timeout=10)
         self.value = None
+        self.confirmed = confirmed
+        self.cancelled = cancelled
 
     # When the confirm button is pressed, set the inner value to `True` and
     # stop the View from listening to more input.
     # We also send the user an ephemeral message that we're confirming their choice.
-    @discord.ui.button(label='Confirm', style=discord.ButtonStyle.green)
+    @discord.ui.button(label='Send new announcements', style=discord.ButtonStyle.green)
     async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_message('Confirming', ephemeral=True)
+        if self.confirmed:
+            await interaction.response.send_message(self.confirmed, ephemeral=True)
         self.value = True
         self.stop()
 
     # This one is similar to the confirmation button except sets the inner value to `False`
-    @discord.ui.button(label='Cancel', style=discord.ButtonStyle.grey)
+    @discord.ui.button(label='Delete announcements', style=discord.ButtonStyle.red)
     async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_message('Cancelling', ephemeral=True)
+        if self.cancelled:
+            await interaction.response.send_message(self.cancelled, ephemeral=True)
+        self.value = False
+        self.stop()
+
+class Confirm(discord.ui.View):
+    def __init__(self, confirmed = None, cancelled = None):
+        super().__init__()
+        self.value = None
+        self.confirmed = confirmed
+        self.cancelled = cancelled
+
+    # When the confirm button is pressed, set the inner value to `True` and
+    # stop the View from listening to more input.
+    # We also send the user an ephemeral message that we're confirming their choice.
+    @discord.ui.button(label='Yes', style=discord.ButtonStyle.green)
+    async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if self.confirmed:
+            await interaction.response.send_message(self.confirmed, ephemeral=True)
+        self.value = True
+        self.stop()
+
+    # This one is similar to the confirmation button except sets the inner value to `False`
+    @discord.ui.button(label='No', style=discord.ButtonStyle.red)
+    async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if self.cancelled:
+            await interaction.response.send_message(self.cancelled, ephemeral=True)
         self.value = False
         self.stop()
 
