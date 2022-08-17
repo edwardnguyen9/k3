@@ -116,6 +116,9 @@ class Interaction:
         A dictionary that can be used to store extraneous data for use during
         interaction processing. The library will not touch any values or keys
         within this dictionary.
+    command_failed: :class:`bool`
+        Whether the command associated with this interaction failed to execute.
+        This includes checks and execution.
     """
 
     __slots__: Tuple[str, ...] = (
@@ -132,6 +135,7 @@ class Interaction:
         'locale',
         'guild_locale',
         'extras',
+        'command_failed',
         '_permissions',
         '_app_permissions',
         '_state',
@@ -155,6 +159,7 @@ class Interaction:
         # an interaction. This is mainly for internal purposes and it gives it a free-for-all slot.
         self._baton: Any = MISSING
         self.extras: Dict[Any, Any] = {}
+        self.command_failed: bool = False
         self._from_data(data)
 
     def _from_data(self, data: InteractionPayload):
@@ -880,8 +885,9 @@ class InteractionResponse:
 
         translator = self._parent._state._translator
         if translator is not None:
+            user_locale = self._parent.locale
             payload: Dict[str, Any] = {
-                'choices': [await option.get_translated_payload(translator) for option in choices],
+                'choices': [await option.get_translated_payload_for_locale(translator, user_locale) for option in choices],
             }
         else:
             payload: Dict[str, Any] = {

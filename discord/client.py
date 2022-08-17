@@ -630,7 +630,11 @@ class Client:
         if self.loop is _loop:
             await self._async_setup_hook()
 
-        data = await self.http.static_login(token.strip())
+        if not isinstance(token, str):
+            raise TypeError(f'expected token to be a str, received {token.__class__!r} instead')
+        token = token.strip()
+
+        data = await self.http.static_login(token)
         self._connection.user = ClientUser(state=self._connection, data=data)
         self._application = await self.application_info()
         if self._connection.application_id is None:
@@ -679,9 +683,11 @@ class Client:
                 while True:
                     await self.ws.poll_event()
             except ReconnectWebSocket as e:
-                _log.info('Got a request to %s the websocket.', e.op)
+                _log.debug('Got a request to %s the websocket.', e.op)
                 self.dispatch('disconnect')
                 ws_params.update(sequence=self.ws.sequence, resume=e.resume, session=self.ws.session_id)
+                if e.resume:
+                    ws_params['gateway'] = self.ws.gateway
                 continue
             except (
                 OSError,
@@ -705,7 +711,13 @@ class Client:
 
                 # If we get connection reset by peer then try to RESUME
                 if isinstance(exc, OSError) and exc.errno in (54, 10054):
-                    ws_params.update(sequence=self.ws.sequence, initial=False, resume=True, session=self.ws.session_id)
+                    ws_params.update(
+                        sequence=self.ws.sequence,
+                        gateway=self.ws.gateway,
+                        initial=False,
+                        resume=True,
+                        session=self.ws.session_id,
+                    )
                     continue
 
                 # We should only get this when an unhandled close code happens,
@@ -725,7 +737,12 @@ class Client:
                 # Always try to RESUME the connection
                 # If the connection is not RESUME-able then the gateway will invalidate the session.
                 # This is apparently what the official Discord client does.
-                ws_params.update(sequence=self.ws.sequence, resume=True, session=self.ws.session_id)
+                ws_params.update(
+                    sequence=self.ws.sequence,
+                    gateway=self.ws.gateway,
+                    resume=True,
+                    session=self.ws.session_id,
+                )
 
     async def close(self) -> None:
         """|coro|
@@ -793,6 +810,7 @@ class Client:
         log_handler: Optional[logging.Handler] = MISSING,
         log_formatter: logging.Formatter = MISSING,
         log_level: int = MISSING,
+        root_logger: bool = False,
     ) -> None:
         """A blocking call that abstracts away the event loop
         initialisation from you.
@@ -845,6 +863,14 @@ class Client:
             you can use ``logging.getLogger().setLevel(level)``.
 
             .. versionadded:: 2.0
+        root_logger: :class:`bool`
+            Whether to set up the root logger rather than the library logger.
+            By default, only the library logger (``'discord'``) is set up. If this
+            is set to ``True`` then the root logger is set up as well.
+
+            Defaults to ``False``.
+
+            .. versionadded:: 2.0
         """
 
         async def runner():
@@ -872,6 +898,11 @@ class Client:
             log_handler.setFormatter(log_formatter)
             logger.setLevel(log_level)
             logger.addHandler(log_handler)
+
+            if root_logger:
+                logger = logging.getLogger()
+                logger.setLevel(log_level)
+                logger.addHandler(log_handler)
 
         try:
             asyncio.run(runner())

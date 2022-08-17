@@ -24,11 +24,10 @@ DEALINGS IN THE SOFTWARE.
 
 from __future__ import annotations
 
-from typing import Any, TYPE_CHECKING, List, Optional, Union
-
+from typing import Any, TYPE_CHECKING, List, Optional, Sequence, Union
 
 from ..enums import AppCommandOptionType, AppCommandType, Locale
-from ..errors import DiscordException
+from ..errors import DiscordException, HTTPException, _flatten_error_dict
 
 __all__ = (
     'AppCommandError',
@@ -47,14 +46,17 @@ __all__ = (
     'BotMissingPermissions',
     'CommandOnCooldown',
     'MissingApplicationID',
+    'CommandSyncFailure',
 )
 
 if TYPE_CHECKING:
-    from .commands import Command, Group, ContextMenu
+    from .commands import Command, Group, ContextMenu, Parameter
     from .transformers import Transformer
-    from .translator import TranslationContext, locale_str
+    from .translator import TranslationContextTypes, locale_str
     from ..types.snowflake import Snowflake, SnowflakeList
     from .checks import Cooldown
+
+    CommandTypes = Union[Command[Any, ..., Any], Group, ContextMenu]
 
 APP_ID_NOT_FOUND = (
     'Client does not have an application_id set. Either the function was called before on_ready '
@@ -162,11 +164,11 @@ class TranslationError(AppCommandError):
         *msg: str,
         string: Optional[Union[str, locale_str]] = None,
         locale: Optional[Locale] = None,
-        context: TranslationContext,
+        context: TranslationContextTypes,
     ) -> None:
         self.string: Optional[Union[str, locale_str]] = string
         self.locale: Optional[Locale] = locale
-        self.context: TranslationContext = context
+        self.context: TranslationContextTypes = context
 
         if msg:
             super().__init__(*msg)
@@ -444,3 +446,83 @@ class MissingApplicationID(AppCommandError):
 
     def __init__(self, message: Optional[str] = None):
         super().__init__(message or APP_ID_NOT_FOUND)
+
+
+def _get_command_error(
+    index: str,
+    inner: Any,
+    objects: Sequence[Union[Parameter, CommandTypes]],
+    messages: List[str],
+    indent: int = 0,
+) -> None:
+    # Import these here to avoid circular imports
+    from .commands import Command, Group, ContextMenu
+
+    indentation = ' ' * indent
+
+    # Top level errors are:
+    # <number>: { <key>: <error> }
+    # The dicts could be nested, e.g.
+    # <number>: { <key>: { <second>: <error> } }
+    # Luckily, this is already handled by the flatten_error_dict utility
+    if not index.isdigit():
+        errors = _flatten_error_dict(inner, index)
+        messages.extend(f'In {k}: {v}' for k, v in errors.items())
+        return
+
+    idx = int(index)
+    try:
+        obj = objects[idx]
+    except IndexError:
+        dedent_one_level = ' ' * (indent - 2)
+        errors = _flatten_error_dict(inner, index)
+        messages.extend(f'{dedent_one_level}In {k}: {v}' for k, v in errors.items())
+        return
+
+    children: Sequence[Union[Parameter, CommandTypes]] = []
+    if isinstance(obj, Command):
+        messages.append(f'{indentation}In command {obj.qualified_name!r} defined in function {obj.callback.__qualname__!r}')
+        children = obj.parameters
+    elif isinstance(obj, Group):
+        messages.append(f'{indentation}In group {obj.qualified_name!r} defined in module {obj.module!r}')
+        children = obj.commands
+    elif isinstance(obj, ContextMenu):
+        messages.append(
+            f'{indentation}In context menu {obj.qualified_name!r} defined in function {obj.callback.__qualname__!r}'
+        )
+    else:
+        messages.append(f'{indentation}In parameter {obj.name!r}')
+
+    for key, remaining in inner.items():
+        # Special case the 'options' key since they have well defined meanings
+        if key == 'options':
+            for index, d in remaining.items():
+                _get_command_error(index, d, children, messages, indent=indent + 2)
+        else:
+            errors = _flatten_error_dict(remaining, key=key)
+            messages.extend(f'{indentation}  {k}: {v}' for k, v in errors.items())
+
+
+class CommandSyncFailure(AppCommandError, HTTPException):
+    """An exception raised when :meth:`CommandTree.sync` failed.
+
+    This provides syncing failures in a slightly more readable format.
+
+    This inherits from :exc:`~discord.app_commands.AppCommandError`
+    and :exc:`~discord.HTTPException`.
+
+    .. versionadded:: 2.0
+    """
+
+    def __init__(self, child: HTTPException, commands: List[CommandTypes]) -> None:
+        # Consume the child exception and make it seem as if we are that exception
+        self.__dict__.update(child.__dict__)
+
+        messages = [f'Failed to upload commands to Discord (HTTP status {self.status}, error code {self.code})']
+
+        if self._errors:
+            for index, inner in self._errors.items():
+                _get_command_error(index, inner, commands, messages)
+
+        # Equivalent to super().__init__(...) but skips other constructors
+        self.args = ('\n'.join(messages),)
