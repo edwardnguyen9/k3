@@ -63,7 +63,10 @@ class ErrorHandler(commands.Cog, name='Error Handler'):
     async def send_error_message(self, ctx, error):
         
         if isinstance(ctx, discord.Interaction):
-            await ctx.followup.send(error, ephemeral=True)
+            try:
+                await ctx.response.send_message(error, ephemeral=True)
+            except discord.InteractionResponded:
+                await ctx.followup.send(error, ephemeral=True)
         elif isinstance(ctx, commands.Context):
             await ctx.send(error)
         else:

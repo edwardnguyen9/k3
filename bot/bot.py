@@ -9,6 +9,7 @@ from pprint import pformat
 from dotenv import load_dotenv
 
 from assets import idle, postgres
+from classes.profile import Profile
 from utils import errors, utils
 
 load_dotenv()
@@ -50,6 +51,7 @@ class Kiddo(commands.Bot):
         self.idle_guilds = {}
         self.api_available = True
         self.crates = {}
+        self.uptime = discord.utils.utcnow()
         self.tree.on_error = self.on_error
 
     async def on_error(self, interaction, error):
@@ -101,7 +103,7 @@ class Kiddo(commands.Bot):
         if channel is None: return
         author = None if ctx is None else ctx.author if isinstance(ctx, commands.Context) else ctx.user
         message = None if not ctx else 'Query called by {} in {}'.format(
-            author.name, f'#{ctx.channel.name} ({ctx.channel.mention})' # type: ignore
+            author.name, f'#{ctx.channel.name} ({ctx.channel.mention})' if ctx.guild else 'DM' # type: ignore
         )
         try:
             await channel.send(
@@ -114,7 +116,7 @@ class Kiddo(commands.Bot):
                 ).add_field(
                     name='Response', value='.'.join([str(i) for i in [status, len(res) if res is not None else None] if i is not None])
                 ).set_footer(
-                    text=' | '.join([str(i) for i in [ctx.guild.name if ctx else None, '{}ms'.format(delay)] if i is not None]) # type: ignore
+                    text=' | '.join([str(i) for i in [ctx.guild.name if ctx and ctx.guild else None, '{}ms'.format(delay)] if i is not None])
                 ),
                 file=discord.File(
                     filename='{}.txt'.format(query[:query.index('?')] if '?' in query else 'query'),
@@ -157,6 +159,12 @@ class Kiddo(commands.Bot):
             except discord.Forbidden:
                 return
         return await channel.send(message, embed=embed, file=file)  # type: ignore
+
+    async def custom_log(self, message=None, embed=None, file=None, channel=824146368108560394):
+        if utils.check_if_all_null(message, embed, file): return
+        log = self.get_channel(channel)
+        if log is None: return
+        return await log.send(message, embed=embed, file=file, allowed_mentions=discord.AllowedMentions(everyone=False, users=False, roles=True, replied_user=False))  # type: ignore
 
     async def setup_hook(self) -> None:
         # Load extensions
@@ -252,7 +260,7 @@ class Kiddo(commands.Bot):
                     break
         return (res, status)
 
-    async def get_equipped(self, uid, ctx=None, orgs=False, *, manual_update=False):
+    async def get_equipped(self, uid, ctx=None, orgs=True, *, manual_update=False):
         old_equipped = await self.pool.fetchval(postgres.queries['fetch_weapons'], uid) or []
         equipped = [i[0] for i in old_equipped]
         hands, dmg_lim, amr_lim = 0, 101, 101
@@ -351,11 +359,10 @@ class Kiddo(commands.Bot):
             to_update = [uid, *log_p, log_w, discord.utils.utcnow()]
             if not manual_update:
                 await self.pool.execute(postgres.queries['update_weapons'], *to_update)
-        else: log_p, log_w = [], []
         if orgs:
-            return equipped, profile, to_update if manual_update else None
+            return (equipped, profile, to_update)
         else:
-            return log_w, log_p, to_update if manual_update else None
+            return Profile(data=profile, weapons=equipped) if profile else None
 
     def _get_prefix(self, bot, message):
         if not message.guild:

@@ -1,7 +1,7 @@
 import discord, datetime
 from random import getrandbits
 
-from assets import idle
+from assets import idle, raid
 from utils import utils
 
 # Profile
@@ -353,4 +353,47 @@ def loot(page):
                 'Owner: <@{}>'.format(loot['user'])
             )
         )
+    return embed
+
+def report(report: dict):
+    embed = None
+    if 'raid' in report['mode'].lower():
+        fields = [
+            ('Boss HP', '{:,.1f}/{:,.1f}'.format(*report['boss'][1:2]), True) if 'boss' in report else None,
+            ('{}\'s HP'.format(report['impostor'][0]['name']), '{:,.1f}/{:,.1f}'.format(*report['impostor'][1:2]), True) if 'impostor' in report else None,
+            ('City statistics', '\n'.join([
+                'Name: {}'.format(report['city'][0]),
+                'Ruler: {}'.format(report['city'][2]),
+                'Total defenses: {:,d}'.format(report['city'][1]),
+            ]), True) if 'city' in report else None,
+            (
+                'Raiders remaining', '{:,d}/{:,d}'.format(
+                    len([i for i in report['fighters'] if i[1] > 0]),
+                    len(report['fighters'])
+                ),
+                True
+            ),
+            ('Undead statistics', '\n'.join([
+                'Summoned: {}'.format(report['undeads'][0] if report['undeads'][0] else 'Infinite'),
+                'Undead raiders killed: {}/{}'.format(report['undeads'][3]-report['undeads'][1], report['undeads'][2]),
+                'Total killed: {}'.format(report['undeads'][3])
+            ]), True) if 'undeads' in report else None,
+            ('Increased possessed chance', '<@{}>'.format(report['blessed']), True) if 'blessed' in report and report['blessed'] else None,
+            ('Time elapsed', utils.get_timedelta(report['timestamps'][1] - report['timestamps'][0]), True),
+            ('Defenses', '\n'.join(report['damage']), False) if 'damage' in report else None
+        ]
+        print(
+            len([i for i in report['fighters'] if i[1] > 0]),
+            len([i for i in report['fighters'] if i[1] == 0]),
+            len([i for i in report['fighters'] if i[1] < 0])
+        )
+        embed = discord.Embed(
+            title='{} results'.format(report['mode']),
+            description='\n'.join(map(lambda x: '<@{}> - {:,.1f} HP'.format(*x), report['fighters'])),
+            color=0x00ff00 if (report['timestamps'][1] - report['timestamps'][0]) < raid.raid_cfg['time'] and len([i for i in report['fighters'] if i[1] > 0]) > 0 else 0xff0000,
+            timestamp=datetime.datetime.fromtimestamp(report['timestamps'][1], tz=datetime.timezone.utc)
+        ).set_footer(text='{} rounds'.format(report['rounds']))
+        for i in fields:
+            if i is not None:
+                embed.add_field(name=i[0], value=i[1], inline=i[2])
     return embed

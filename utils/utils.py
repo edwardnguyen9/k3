@@ -187,3 +187,19 @@ def get_role_ids(key: str, cfg: dict):
         key=lambda x: x[2],
         reverse=True
     )
+
+def get_timedelta(seconds):
+    seconds = round(seconds)
+    delta = [
+        '{} {}'.format(i[0], i[1].format(s='s' if i[0] > 1 else ''))
+        for i in list(zip(
+            [
+                seconds // 86400,
+                seconds // 3600 % 24,
+                seconds // 60 % 60,
+                seconds % 60,
+            ],
+            ['day{s}', 'hour{s}', 'minute{s}', 'second{s}']
+        )) if i[0] > 0
+    ]
+    return ('{} and {}'.format(', '.join(delta[:-1]), delta[-1]) if len(delta) > 1 else delta[0] if len(delta) > 0 else '')

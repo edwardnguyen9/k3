@@ -11,7 +11,7 @@ from assets import idle, postgres
 from bot.bot import Kiddo
 from classes.profile import Profile
 from classes.paginator import Paginator
-from utils import command_config as config, errors, utils, embeds, queries
+from utils import command_config as config, errors, utils, embeds, queries, checks  # type: ignore
 
 
 class General(commands.Cog):
@@ -70,17 +70,17 @@ class General(commands.Cog):
 
     @app_commands.checks.has_permissions(kick_members=True)
     async def _menu_profile(self, interaction: discord.Interaction, user: discord.User):
-        await self._get_profile(interaction, user, True)
+        await _get_profile(self.bot, interaction, user, True)
 
     @app_commands.checks.has_permissions(kick_members=True)
     async def _menu_equipped(self, interaction: discord.Interaction, user: discord.User):
-        await self._get_equipped(interaction, user, True)
+        await _get_equipped(self.bot, interaction, user, True)
 
     @app_commands.checks.has_permissions(kick_members=True)
     async def _menu_xp(self, interaction: discord.Interaction, user: discord.User):
-        await self._get_xp(interaction, user, True)
+        await _get_xp(self.bot, interaction, user, True)
 
-
+    @checks.perms(False)
     @commands.command(
         name='profile',
         aliases=['p', 'pp', 'p2', 'me'],
@@ -90,8 +90,9 @@ class General(commands.Cog):
         help='> [user]: The person whose profile you wish to get. If left blank, will get your own profile'
     )
     async def _profile(self, ctx: commands.Context, user: discord.User = commands.Author):
-        await self._get_profile(ctx, user)
+        await _get_profile(self.bot, ctx, user)
     
+    @checks.perms(False)
     @commands.command(
         name='equipped',
         aliases=['eq', 'e'],
@@ -101,8 +102,9 @@ class General(commands.Cog):
         help='> [user]: The person whose items you wish to get. If left blank, will get your own items.'
     )
     async def _equipped(self, ctx: commands.Context, user: discord.User = commands.Author):
-        await self._get_equipped(ctx, user)
+        await _get_equipped(self.bot, ctx, user)
 
+    @checks.perms(False)
     @commands.command(
         name='item',
         aliases=['i'],
@@ -112,8 +114,9 @@ class General(commands.Cog):
         help='> <item id>: The ID of the item.'
     )
     async def _item(self, ctx: commands.Context, iid: int):
-        await self._get_item(ctx, iid)
+        await _get_item(self.bot, ctx, iid)
 
+    @checks.perms(False)
     @commands.command(
         name='guild',
         aliases=['g'],
@@ -123,8 +126,9 @@ class General(commands.Cog):
         help='> <guild id>: The ID of the guild.'
     )
     async def _guild(self, ctx: commands.Context, gid: int):
-        await self._get_guild(ctx, gid)
+        await _get_guild(self.bot, ctx, gid)
 
+    @checks.perms(False)
     @commands.command(
         name='alliance',
         aliases=['a'],
@@ -134,8 +138,9 @@ class General(commands.Cog):
         help='> <guild ID>: The ID of an alliance member.'
     )
     async def _alliance(self, ctx: commands.Context, aid: int):
-        await self._get_alliance(ctx, aid)
+        await _get_alliance(self.bot, ctx, aid)
 
+    @checks.perms(False)
     @commands.command(
         name='query',
         aliases=['q'],
@@ -147,7 +152,7 @@ class General(commands.Cog):
         '''
     )
     async def _query(self, ctx: commands.Context, *, query: str = ''):
-        await self._get_query(ctx, query)
+        await _get_query(self.bot, ctx, query)
 
     @commands.command(
         name='raidstats',
@@ -163,8 +168,9 @@ class General(commands.Cog):
     async def _raidstats(self, ctx: commands.Context, start: float = 1.0, end: float = 10.0):
         if start < 1: raise errors.InvalidInput(ctx, 'start', start)
         if end <= start: raise errors.InvalidInput(ctx, 'end', end)
-        await self._get_raidstats(ctx, start, end)
+        await _get_raidstats(self.bot, ctx, start, end)
 
+    @checks.perms(False)
     @commands.command(
         name='xp',
         brief='Get required XP to next milestones',
@@ -176,8 +182,9 @@ class General(commands.Cog):
     )
     async def _xp(self, ctx: commands.Context, target: Optional[Union[discord.User, int]]):
         if isinstance(target, int) and target < 0: raise errors.InvalidInput(ctx, 'value', target)
-        await self._get_xp(ctx, target)
+        await _get_xp(self.bot, ctx, target)
 
+    @checks.perms(False)
     @commands.command(
         name='missions',
         aliases=['adventures', 'adv'],
@@ -193,8 +200,9 @@ class General(commands.Cog):
         '''
     )
     async def _missions(self, ctx: commands.Context, flags: config.AdventureChance):
-        await self._get_missions(ctx, flags.user or ctx.author, flags.level, flags.booster, flags.building)
+        await _get_missions(self.bot, ctx, flags.user or ctx.author, flags.level, flags.booster, flags.building)
 
+    @checks.perms(False, mod=True)
     @commands.command(
         name='gvg',
         brief='Get guild\'s top 20 GvG members',
@@ -214,6 +222,7 @@ class General(commands.Cog):
             ),
             ctx
         )
+        print(status)
         if status == 429:
             raise errors.TooManyRequests(ctx)
         elif res is None:
@@ -235,6 +244,7 @@ class General(commands.Cog):
             description = ['{stats} - battle nominate {id}'.format(id=u[0].user, stats=u[1]) for u in members[:20]]
             return await ctx.send('\n'.join(description))
 
+    @checks.perms(False)
     @commands.command(
         name='activity',
         aliases=['ac', 'activitycheck'],
@@ -251,7 +261,7 @@ class General(commands.Cog):
         Get adventure activity of guild members.
         '''
         gid = gid if ctx.author.id == self.bot.owner.id else None  # type: ignore
-        await self._get_activity(ctx, inactive, gid)
+        await _get_activity(self.bot, ctx, inactive, gid)
 
     @app_commands.describe(
         user='User (override all other filters)', name='Character name',
@@ -298,6 +308,8 @@ class General(commands.Cog):
         ],
     )
     @app_commands.command(name='profile')
+    @checks.api_guilds()
+    @checks.perms()
     async def _app_profile(
         self, interaction: discord.Interaction, user: Optional[discord.User] = None,
         name: Optional[str] = None, lvmin: Optional[app_commands.Range[int, 1, 30]] = None, lvmax: Optional[app_commands.Range[int, 1, 30]] = None,
@@ -312,13 +324,14 @@ class General(commands.Cog):
         '''
         Get IdleRPG profile
         '''
+        await checks.cooldown(interaction)
         if user is not None:
-            await self._get_profile(interaction, user)
+            await _get_profile(self.bot, interaction, user)
         elif utils.check_if_all_null(
             name, lvmin, lvmax, race, classes, emin, emax, ratkmin, ratkmax, rdefmin, rdefmax,
             pvpmin, pvpmax, spouse, lsmin, lsmax, god, luck, fmin, fmax, guild
         ):
-            await self._get_profile(interaction, interaction.user)
+            await _get_profile(self.bot, interaction, interaction.user)
         else:
             await interaction.response.defer(thinking=True)
             query = queries.profiles(
@@ -347,13 +360,15 @@ class General(commands.Cog):
 
     @app_commands.describe(user='User')
     @app_commands.command(name='equipped')
+    @checks.api_guilds()
+    @checks.perms()
     async def _app_equipped(
         self, interaction: discord.Interaction, user: Optional[discord.User] = None,
     ):
         '''
         Get equipped item
         '''
-        await self._get_equipped(interaction, user or interaction.user)
+        await _get_equipped(self.bot, interaction, user or interaction.user)
 
     @app_commands.describe(
         iid='The ID of the item (override all other filters)',
@@ -384,6 +399,8 @@ class General(commands.Cog):
         ]
     )
     @app_commands.command(name='item')
+    @checks.api_guilds()
+    @checks.perms()
     async def _app_item(
         self, interaction: discord.Interaction, iid: Optional[app_commands.Range[int, 0]] = None,
         imin: Optional[app_commands.Range[int, 0]] = None, imax: Optional[app_commands.Range[int, 0]] = None,
@@ -398,7 +415,7 @@ class General(commands.Cog):
         Get item's information
         '''
         if iid is not None:
-            await self._get_item(interaction, iid)
+            await _get_item(self.bot, interaction, iid)
         else:
             await interaction.response.defer(thinking=True)
             query = queries.items(
@@ -448,6 +465,8 @@ class General(commands.Cog):
         ]
     )
     @app_commands.command(name='guild')
+    @checks.api_guilds()
+    @checks.perms()
     async def _app_guild(
         self, interaction: discord.Interaction, gid: Optional[app_commands.Range[int, 0]] = None,
         imin: Optional[app_commands.Range[int, 0]] = None, imax: Optional[app_commands.Range[int, 0]] = None,
@@ -463,7 +482,7 @@ class General(commands.Cog):
         Get guild's information
         '''
         if gid is not None:
-            await self._get_guild(interaction, gid)
+            await _get_guild(self.bot, interaction, gid)
         else:
             await interaction.response.defer(thinking=True)
             query = queries.guilds(
@@ -499,13 +518,15 @@ class General(commands.Cog):
     @app_commands.describe(aid='Guild ID')
     @app_commands.rename(aid='id')
     @app_commands.command(name='alliance')
+    @checks.api_guilds()
+    @checks.perms()
     async def _app_alliance(
         self, interaction: discord.Interaction, aid: app_commands.Range[int, 0],
     ):
         '''
         Get alliance members
         '''
-        await self._get_alliance(interaction, aid)
+        await _get_alliance(self.bot, interaction, aid)
     
     @app_commands.describe(
         name='Included in pet name', user='Pet owner',
@@ -530,6 +551,8 @@ class General(commands.Cog):
         ]
     )
     @app_commands.command(name='pets')
+    @checks.api_guilds()
+    @checks.perms()
     async def _app_pets(
         self, interaction: discord.Interaction,
         name: Optional[str] = None, user: Optional[discord.User] = None,
@@ -584,6 +607,8 @@ class General(commands.Cog):
         ]
     )
     @app_commands.command(name='children')
+    @checks.api_guilds()
+    @checks.perms()
     async def _app_children(
         self, interaction: discord.Interaction,
         name: Optional[str] = None, father: Optional[discord.User] = None, mother: Optional[discord.User] = None, parent: Optional[discord.User] = None, 
@@ -633,6 +658,8 @@ class General(commands.Cog):
         ]
     )
     @app_commands.command(name='loot')
+    @checks.api_guilds()
+    @checks.perms()
     async def _app_loot(
         self, interaction: discord.Interaction,
         user: Optional[discord.User] = None, name: Optional[str] = None,
@@ -705,6 +732,8 @@ class General(commands.Cog):
         wtype=config.auto_market_type
     )
     @app_commands.command(name='market')
+    @checks.api_guilds()
+    @checks.perms()
     async def _app_market(
         self, interaction: discord.Interaction,
         wtype: Optional[str] = None, smin: Optional[app_commands.Range[int, 0, 101]] = None, smax: Optional[app_commands.Range[int, 0, 101]] = None,
@@ -741,36 +770,42 @@ class General(commands.Cog):
 
     @app_commands.describe(query='The query to send to IdleRPG API')
     @app_commands.command(name='query')
+    @checks.api_guilds()
+    @checks.perms()
     async def _app_query(self, interaction: discord.Interaction, query: Optional[str] = ''):
         '''
         Send a query to IdleRPG API
         '''
-        await self._get_query(interaction, query or '')
+        await _get_query(self.bot, interaction, query or '')
 
     @app_commands.describe(
         start='The starting value (must be at least 1, default to 1)', end='The final value (must be greater than starting value, default to 10)'
     )
     @app_commands.rename(start='start_value', end='final_value')
     @app_commands.command(name='raidstats')
+    @checks.api_guilds()
+    @checks.perms(all=True)
     async def _app_raidstats(self, interaction: discord.Interaction, start: app_commands.Range[float, 1] = 1, end: app_commands.Range[float, 1] = 10):
         '''
         Get the cost of increasing raidstats
         '''
         if end <= start: raise errors.InvalidInput(interaction, 'final_value', end)
-        else: await self._get_raidstats(interaction, start, end)
+        else: await _get_raidstats(self.bot, interaction, start, end)
 
     @app_commands.describe(
         xp='The XP to calculate (override user filter)', user='The user to fetch'
     )
     @app_commands.command(name='xp')
+    @checks.api_guilds()
+    @checks.perms()
     async def _app_xp(self, interaction: discord.Interaction, xp: Optional[app_commands.Range[int, 0]] = None, user: Optional[discord.User] = None):
         '''
         Get required XP to next milestones
         '''
         if xp is not None:
-            await self._get_xp(interaction, xp)
+            await _get_xp(self.bot, interaction, xp)
         else:
-            await self._get_xp(interaction, user)
+            await _get_xp(self.bot, interaction, user)
 
     @app_commands.describe(
         user='Get success chance for this user (default to the command user)',
@@ -781,6 +816,8 @@ class General(commands.Cog):
         booster='time_booster', building='adventure_building',
     )
     @app_commands.command(name='adventures')
+    @checks.api_guilds()
+    @checks.perms()
     async def _app_missions(self, interaction: discord.Interaction,
         user: Optional[discord.User] = None, level: Optional[app_commands.Range[int, 1, 30]] = None,
         booster: bool = False, building: app_commands.Range[int, 0, 10] = 10
@@ -788,7 +825,7 @@ class General(commands.Cog):
         '''
         Get adventure information
         '''
-        await self._get_missions(interaction, user or interaction.user, level, booster, building)
+        await _get_missions(self.bot, interaction, user or interaction.user, level, booster, building)
 
     @app_commands.choices(
         god=[
@@ -796,6 +833,8 @@ class General(commands.Cog):
         ]
     )
     @app_commands.command(name='luck')
+    @checks.api_guilds()
+    @checks.perms(all=True)
     async def _app_luck(self, interaction: discord.Interaction, god: Optional[str] = None, limit: Optional[app_commands.Range[int, 10]] = None):
         '''
         Get luck statistics
@@ -927,6 +966,8 @@ class General(commands.Cog):
         user='owner', smax='max_stat', smin='min_stat', wtype='type', imin='min_id', imax='max_id', vmin='min_value', vmax='max_value', ex='exclude', trade='for_trade'
     )
     @app_commands.command(name='trademerch')
+    @checks.api_guilds()
+    @checks.perms(gold=True)
     async def _app_trademerch(
         self, interaction: discord.Interaction, user: Optional[discord.User] = None,
         smax: Optional[app_commands.Range[int, 0, 101]] = None, smin: Optional[app_commands.Range[int, 0, 101]] = None,
@@ -941,9 +982,9 @@ class General(commands.Cog):
         await interaction.response.defer(thinking=True)
         owner = user or interaction.user
         protected = await self.bot.pool.fetchval(postgres.queries['view_fav'], owner.id) or []
-        if ex: protected += [int(i) for i in ex.split()]  # type: ignore
+        if ex: protected += [int(i) for i in ex.split()]
         query = queries.items(
-            imin, imax, name, owner, smin, smax, vmin, vmax, wtype, None, hand, None, None, list(set(protected)), limit, 'id.desc', False  # type: ignore
+            imin, imax, name, owner, smin, smax, vmin, vmax, wtype, None, hand, None, None, list(set(protected)), limit, 'id.desc', False
         ) + '&select=id,value,inventory(equipped),market(price)&inventory.equipped=is.false'
         (res, status) = await self.bot.idle_query(query, interaction)
         if status == 429:
@@ -983,6 +1024,8 @@ class General(commands.Cog):
         add='Item IDs to add to protected list', remove='Item IDs to remove from protected list'
     )
     @app_commands.command(name='protected')
+    @checks.api_guilds()
+    @checks.perms()
     async def _app_protected(
         self, interaction: discord.Interaction, add: Optional[str] = None, remove: Optional[str] = None
     ):
@@ -1077,6 +1120,8 @@ class General(commands.Cog):
             app_commands.Choice(value='my', name='Mystery crates'),
         ])
     @app_commands.command(name='leaderboard')
+    @checks.api_guilds()
+    @checks.perms()
     async def _app_leaderboard(self, interaction: discord.Interaction, sort: str, limit: app_commands.Range[int, 5, 100] = 100):
         '''
         Get top players (up to top 100)
@@ -1156,11 +1201,13 @@ class General(commands.Cog):
 
     @app_commands.describe(inactive='Only fetch inactive members (default to True)')
     @app_commands.command(name='activity')
+    @checks.api_guilds()
+    @checks.perms()
     async def _app_activity(self, interaction: discord.Interaction, inactive: bool = True):
         '''
         Get adventure activity of guild members.
         '''
-        await self._get_activity(interaction, inactive)
+        await _get_activity(self.bot, interaction, inactive)
 
     @app_commands.describe(
         maxprice='Max buying price ($500 by default)', minprice='Min buying price', level='Trade building level (10 by default)',
@@ -1169,7 +1216,9 @@ class General(commands.Cog):
     @app_commands.rename(
         maxprice='max_price', minprice='min_price', minid='ignore_id'
     )
-    @app_commands.command(name='cheap')    
+    @app_commands.command(name='cheap')   
+    @checks.api_guilds()
+    @checks.perms(gold=True)
     async def _app_cheap(
         self, interaction: discord.Interaction,
         maxprice: app_commands.Range[int, 1] = 500, minprice: app_commands.Range[int, 1] = 1,
@@ -1232,6 +1281,8 @@ class General(commands.Cog):
         order=[app_commands.Choice(value=k, name=v) for k, v in idle.sort_strength.items()]
     )
     @app_commands.command(name='strength')
+    @checks.api_guilds()
+    @checks.perms()
     async def _app_strength(self, interaction: discord.Interaction, order: str = 'str'):
         '''
         Get guild member's ranking in strength
@@ -1304,425 +1355,389 @@ class General(commands.Cog):
                 pgs.append(embed)
             await Paginator(extras=pgs).paginate(interaction)
 
-    async def _get_profile(self, ctx: Union[commands.Context, discord.Interaction], user: Union[discord.Member, discord.User], ephemeral: bool = False):
-        if isinstance(ctx, discord.Interaction):
-            await ctx.response.defer(thinking=True, ephemeral=ephemeral)
-            send_message = ctx.followup
-            author = ctx.user
-        else:
-            send_message = ctx
-            author = ctx.author
-        weapons = await self.bot.pool.fetchval(postgres.queries['fetch_weapons'], user.id) or []
-        (res, status) = await self.bot.idle_query(idle.queries['profile'].format(userid=user.id), ctx)
+async def _get_profile(bot, ctx: Union[commands.Context, discord.Interaction], user: Union[discord.Member, discord.User], ephemeral: bool = False):
+    if isinstance(ctx, discord.Interaction):
+        await ctx.response.defer(thinking=True, ephemeral=ephemeral)
+        send_message = ctx.followup
+        author = ctx.user
+    else:
+        send_message = ctx
+        author = ctx.author
+    weapons = await bot.pool.fetchval(postgres.queries['fetch_weapons'], user.id) or []
+    (res, status) = await bot.idle_query(idle.queries['profile'].format(userid=user.id), ctx)
+    if status == 429:
+        raise errors.TooManyRequests(ctx)
+    elif res is None:
+        return await send_message.send('An error has occurred while trying to fetch data from the server.')
+    elif len(res) == 0:
+        return await send_message.send('The provided user does not have a profile.')
+    else:
+        p = Profile(data=res[0])
+        await p.update_profile(bot)
+        embed = embeds.profile(bot, res[0], weapons)
+        embed.set_footer(text=(embed.footer.text or author.name), icon_url=author.display_avatar.url)
+        return await send_message.send(embed=embed)
+
+async def _get_equipped(bot, ctx: Union[commands.Context, discord.Interaction], user: Union[discord.Member, discord.User], ephemeral: bool = False):
+    if isinstance(ctx, discord.Interaction):
+        await ctx.response.defer(thinking=True, ephemeral=ephemeral)
+        send_message = ctx.followup
+        author = ctx.user
+    else:
+        send_message = ctx
+        author = ctx.author
+    start_time = datetime.datetime.now()
+    equipped_items, _, _ = await bot.get_equipped(user.id, ctx)
+    delay = round((datetime.datetime.now() - start_time)/datetime.timedelta(microseconds=1000))
+    if len(equipped_items) == 0:
+        return await send_message.send('The provided user does not have any item equipped.')
+    else:
+        embed = discord.Embed(
+            title=f"{user}'s equipped items:",
+            color=random.getrandbits(24)
+        ).set_footer(text=author.name + f' | {delay}ms', icon_url=author.display_avatar.url)
+        for item in equipped_items:
+            itemtype = 'Armor' if item["armor"] > 0 else 'Damage'
+            embed.add_field(
+                name=item['name'], 
+                value=(
+                    f'{itemtype}: {int(item["armor"] + item["damage"])}\n'
+                    f'Type: {item["type"]}\n'
+                    f'ID: {item["id"]}\n'
+                    f'{("Signature: " + item["signature"]) if item["signature"] else ""}'
+                ), 
+                inline=True
+            )
+        return await send_message.send(embed=embed)
+
+async def _get_item(bot, ctx: Union[commands.Context, discord.Interaction], iid: int):
+    if isinstance(ctx, discord.Interaction):
+        await ctx.response.defer(thinking=True)
+        send_message = ctx.followup
+        author = ctx.user
+    else:
+        send_message = ctx
+        author = ctx.author
+    (res, status) = await bot.idle_query(idle.queries['item'].format(id=iid), ctx)
+    if status == 429:
+        raise errors.TooManyRequests(ctx)
+    elif res is None:
+        return await send_message.send('An error has occurred while trying to fetch data from the server.')
+    elif len(res) == 0:
+        return await send_message.send('Cannot find the item with that ID.')
+    else:
+        embed = embeds.items(res)
+        embed.set_footer(text=(embed.footer.text or author.name), icon_url=author.display_avatar.url)
+        return await send_message.send(embed=embed)
+
+async def _get_guild(bot, ctx: Union[commands.Context, discord.Interaction], gid: int):
+    if isinstance(ctx, discord.Interaction):
+        await ctx.response.defer(thinking=True)
+        send_message = ctx.followup
+        author = ctx.user
+    else:
+        send_message = ctx
+        author = ctx.author
+    (res, status) = await bot.idle_query(idle.queries['guild'].format(id=gid, custom=','.join(idle.crates)), ctx)
+    if status == 429:
+        raise errors.TooManyRequests(ctx)
+    elif res is None:
+        return await send_message.send('An error has occurred while trying to fetch data from the server.')
+    elif len(res) == 0:
+        return await send_message.send('Cannot find the guild with that ID.')
+    else:
+        money, crate_count, g, officers = 0, [0, 0, 0, 0, 0, 0], {}, []
+        for i in res:
+            money += i['money']
+            for j in range(6): crate_count[j] += i[idle.crates[j]]
+            if i['guildrank'] == 'Officer': officers.append(i['user'])
+            if i['guild_leader_fkey']: g = i['guild_leader_fkey'][0]
+        update_guild = {
+            str(g['id']): json.dumps([g['name'], g['leader'], g['alliance']['id']])
+        }
+        if g['id'] != g['alliance']['id']:
+            i = g['alliance']
+            bot.idle_guilds[str(i['id'])] = [i['name'], i['leader'], i['alliance']]
+            update_guild[str(g['alliance']['id'])] = json.dumps([g['alliance']['name'], g['alliance']['leader'], g['alliance']['id']])
+        if len(update_guild) > 0: await bot.redis.hset('guilds', mapping=update_guild)
+        embed = embeds.guild(g, len(res), officers, [money] + crate_count, [bot.crates, 'c', 'u', 'r', 'm', 'l', 'my'])
+        embed.set_footer(text=(embed.footer.text or author.name), icon_url=author.display_avatar.url)
+        return await send_message.send(embed=embed)
+
+async def _get_alliance(bot, ctx: Union[commands.Context, discord.Interaction], aid: int):
+    if isinstance(ctx, discord.Interaction):
+        await ctx.response.defer(thinking=True)
+        send_message = ctx.followup
+        author = ctx.user
+    else:
+        send_message = ctx
+        author = ctx.author
+    alliance = bot.idle_guilds[str(aid)][2] if str(aid) in bot.idle_guilds and len(bot.idle_guilds[str(aid)]) == 3 else aid
+    (res, status) = await bot.idle_query(idle.queries['alliance'].format(gid=aid, aid=alliance), ctx)
+    if status == 429:
+        raise errors.TooManyRequests(ctx)
+    elif res is None:
+        return await send_message.send('An error has occurred while trying to fetch data from the server.')
+    elif len(res) == 0:
+        return await send_message.send('Cannot find the guild with that ID.')
+    elif len(res) == 1 and res[0]['id'] != res[0]['alliance']:
+        (res, status) = await bot.idle_query(idle.queries['alliance'].format(gid=res[0]['alliance'], aid=res[0]['alliance']), ctx)
         if status == 429:
             raise errors.TooManyRequests(ctx)
-        elif res is None:
+        elif not res or len(res) == 0:
             return await send_message.send('An error has occurred while trying to fetch data from the server.')
-        elif len(res) == 0:
-            return await send_message.send('The provided user does not have a profile.')
-        else:
-            p = Profile(data=res[0])
-            await p.update_profile(self.bot)
-            embed = embeds.profile(self.bot, res[0], weapons)
-            embed.set_footer(text=(embed.footer.text or author.name), icon_url=author.display_avatar.url)
-            return await send_message.send(embed=embed)
-
-    async def _get_equipped(self, ctx: Union[commands.Context, discord.Interaction], user: Union[discord.Member, discord.User], ephemeral: bool = False):
-        if isinstance(ctx, discord.Interaction):
-            await ctx.response.defer(thinking=True, ephemeral=ephemeral)
-            send_message = ctx.followup
-            author = ctx.user
-        else:
-            send_message = ctx
-            author = ctx.author
-        start_time = datetime.datetime.now()
-        equipped_items, _, _ = await self.bot.get_equipped(user.id, ctx)
-        delay = round((datetime.datetime.now() - start_time)/datetime.timedelta(microseconds=1000))
-        if len(equipped_items) == 0:
-            return await send_message.send('The provided user does not have any item equipped.')
-        else:
-            embed = discord.Embed(
-                title=f"{user}'s equipped items:",
-                color=random.getrandbits(24)
-            ).set_footer(text=author.name + f' | {delay}ms', icon_url=author.display_avatar.url)
-            for item in equipped_items:
-                itemtype = 'Armor' if item["armor"] > 0 else 'Damage'
-                embed.add_field(
-                    name=item['name'], 
-                    value=(
-                        f'{itemtype}: {int(item["armor"] + item["damage"])}\n'
-                        f'Type: {item["type"]}\n'
-                        f'ID: {item["id"]}\n'
-                        f'{("Signature: " + item["signature"]) if item["signature"] else ""}'
-                    ), 
-                    inline=True
-                )
-            return await send_message.send(embed=embed)
-
-    async def _get_item(self, ctx: Union[commands.Context, discord.Interaction], iid: int):
-        if isinstance(ctx, discord.Interaction):
-            await ctx.response.defer(thinking=True)
-            send_message = ctx.followup
-            author = ctx.user
-        else:
-            send_message = ctx
-            author = ctx.author
-        (res, status) = await self.bot.idle_query(idle.queries['item'].format(id=iid), ctx)
-        if status == 429:
-            raise errors.TooManyRequests(ctx)
-        elif res is None:
-            return await send_message.send('An error has occurred while trying to fetch data from the server.')
-        elif len(res) == 0:
-            return await send_message.send('Cannot find the item with that ID.')
-        else:
-            embed = embeds.items(res)
-            embed.set_footer(text=(embed.footer.text or author.name), icon_url=author.display_avatar.url)
-            return await send_message.send(embed=embed)
-
-    async def _get_guild(self, ctx: Union[commands.Context, discord.Interaction], gid: int):
-        if isinstance(ctx, discord.Interaction):
-            await ctx.response.defer(thinking=True)
-            send_message = ctx.followup
-            author = ctx.user
-        else:
-            send_message = ctx
-            author = ctx.author
-        (res, status) = await self.bot.idle_query(idle.queries['guild'].format(id=gid, custom=','.join(idle.crates)), ctx)
-        if status == 429:
-            raise errors.TooManyRequests(ctx)
-        elif res is None:
-            return await send_message.send('An error has occurred while trying to fetch data from the server.')
-        elif len(res) == 0:
-            return await send_message.send('Cannot find the guild with that ID.')
-        else:
-            money, crate_count, g, officers = 0, [0, 0, 0, 0, 0, 0], {}, []
-            for i in res:
-                money += i['money']
-                for j in range(6): crate_count[j] += i[idle.crates[j]]
-                if i['guildrank'] == 'Officer': officers.append(i['user'])
-                if i['guild_leader_fkey']: g = i['guild_leader_fkey'][0]
-            update_guild = {
-                str(g['id']): json.dumps([g['name'], g['leader'], g['alliance']['id']])
-            }
-            if g['id'] != g['alliance']['id']:
-                i = g['alliance']
-                self.bot.idle_guilds[str(i['id'])] = [i['name'], i['leader'], i['alliance']]
-                update_guild[str(g['alliance']['id'])] = json.dumps([g['alliance']['name'], g['alliance']['leader'], g['alliance']['id']])
-            if len(update_guild) > 0: await self.bot.redis.hset('guilds', mapping=update_guild)  # type: ignore
-            embed = embeds.guild(g, len(res), officers, [money] + crate_count, [self.bot.crates, 'c', 'u', 'r', 'm', 'l', 'my'])
-            embed.set_footer(text=(embed.footer.text or author.name), icon_url=author.display_avatar.url)
-            return await send_message.send(embed=embed)
-
-    async def _get_alliance(self, ctx: Union[commands.Context, discord.Interaction], aid: int):
-        if isinstance(ctx, discord.Interaction):
-            await ctx.response.defer(thinking=True)
-            send_message = ctx.followup
-            author = ctx.user
-        else:
-            send_message = ctx
-            author = ctx.author
-        alliance = self.bot.idle_guilds[str(aid)][2] if str(aid) in self.bot.idle_guilds and len(self.bot.idle_guilds[str(aid)]) == 3 else aid
-        (res, status) = await self.bot.idle_query(idle.queries['alliance'].format(gid=aid, aid=alliance), ctx)
-        if status == 429:
-            raise errors.TooManyRequests(ctx)
-        elif res is None:
-            return await send_message.send('An error has occurred while trying to fetch data from the server.')
-        elif len(res) == 0:
-            return await send_message.send('Cannot find the guild with that ID.')
-        elif len(res) == 1 and res[0]['id'] != res[0]['alliance']:
-            (res, status) = await self.bot.idle_query(idle.queries['alliance'].format(gid=res[0]['alliance'], aid=res[0]['alliance']), ctx)
+    else:
+        g = discord.utils.find(lambda x: x['id'] == aid, res)
+        if g is not None and g['alliance'] != int(alliance):  # type: ignore
+            (res, status) = await bot.idle_query(idle.queries['alliance'].format(gid=g['alliance'], aid=g['alliance']), ctx)  # type: ignore
             if status == 429:
                 raise errors.TooManyRequests(ctx)
             elif not res or len(res) == 0:
                 return await send_message.send('An error has occurred while trying to fetch data from the server.')
-        else:
-            g = discord.utils.find(lambda x: x['id'] == aid, res)
-            if g is not None and g['alliance'] != int(alliance):
-                (res, status) = await self.bot.idle_query(idle.queries['alliance'].format(gid=g['alliance'], aid=g['alliance']), ctx)
-                if status == 429:
-                    raise errors.TooManyRequests(ctx)
-                elif not res or len(res) == 0:
-                    return await send_message.send('An error has occurred while trying to fetch data from the server.')
-        guilds = []
-        update_guild = {}
-        for i in res:
-            if i['id'] == i['alliance']: guilds.insert(0, i)
-            else: guilds.append(i)
-            self.bot.idle_guilds[str(i['id'])] = [i['name'], i['leader'], i['alliance']]
-            update_guild[str(i['id'])] = json.dumps([i['name'], i['leader'], i['alliance']])
-        if len(update_guild) > 0: await self.bot.redis.hset('guilds', mapping=update_guild)
-        embed = embeds.alliance(guilds)
-        embed.set_footer(text=(embed.footer.text or author.name), icon_url=author.display_avatar.url)
-        return await send_message.send(embed=embed)
+    guilds = []
+    update_guild = {}
+    for i in res:
+        if i['id'] == i['alliance']: guilds.insert(0, i)
+        else: guilds.append(i)
+        bot.idle_guilds[str(i['id'])] = [i['name'], i['leader'], i['alliance']]
+        update_guild[str(i['id'])] = json.dumps([i['name'], i['leader'], i['alliance']])
+    if len(update_guild) > 0: await bot.redis.hset('guilds', mapping=update_guild)
+    embed = embeds.alliance(guilds)
+    embed.set_footer(text=(embed.footer.text or author.name), icon_url=author.display_avatar.url)
+    return await send_message.send(embed=embed)
 
-    async def _get_query(self, ctx: Union[commands.Context, discord.Interaction], query: str):
-        if isinstance(ctx, discord.Interaction):
-            await ctx.response.defer(thinking=True)
-            send_message = ctx.followup
-            author = ctx.user
-        else:
-            send_message = ctx
-            author = ctx.author
-        if len(query) > 0 and query.startswith(idle.QUERY_PREFIX): query = query[len(idle.QUERY_PREFIX):]
-        (res, status) = await self.bot.idle_query(query, ctx)
+async def _get_query(bot, ctx: Union[commands.Context, discord.Interaction], query: str):
+    if isinstance(ctx, discord.Interaction):
+        await ctx.response.defer(thinking=True)
+        send_message = ctx.followup
+        author = ctx.user
+    else:
+        send_message = ctx
+        author = ctx.author
+    if len(query) > 0 and query.startswith(idle.QUERY_PREFIX): query = query[len(idle.QUERY_PREFIX):]
+    (res, status) = await bot.idle_query(query, ctx)
+    if status == 429:
+        raise errors.TooManyRequests(ctx)
+    elif status != 200 or res is None:
+        return await send_message.send('An error has occurred while trying to fetch data from the server (Code {}).'.format(status))
+    else:
+        endpoint = query[:query.index('?')] if len(query) > 0 and '?' in query else 'query'
+        get_embed = len(query) > 0 and ('select=' not in query or 'select=*' in query) and '?' in query
+        await send_message.send(
+            '{0} entries found.'.format((len(res))),
+            file=discord.File(
+                filename='{}.txt'.format(endpoint),
+                fp=BytesIO(pformat(res).encode())
+            )
+        )
+        if get_embed and len(res):
+            pages = []
+            def get_pages(data, embed_builder):
+                embed = embed_builder(data)
+                embed.set_footer(text=(embed.footer.text or author.name), icon_url=author.display_avatar.url)
+                pages.append(embed)
+            if endpoint == 'profile':
+                for i in res:
+                    weapons = await bot.pool.fetchval(postgres.queries['fetch_weapons'], i['user']) or []
+                    embed = embeds.profile(bot, i, weapons)
+                    embed.set_footer(text=(embed.footer.text or author.name), icon_url=author.display_avatar.url)
+                    pages.append(embed)
+            elif endpoint == 'allitems':
+                entries = utils.pager(res, 5)
+                for i in entries:
+                    get_pages(i, embeds.items)
+            elif endpoint == 'guild':
+                update_guild = {}
+                for i in res:
+                    if str(i['id']) not in update_guild:
+                        bot.idle_guilds[str(i['id'])] = [i['name'], i['leader'], i['alliance']]
+                        update_guild[str(i['id'])] = json.dumps([i['name'], i['leader'], i['alliance']])
+                    if len(update_guild) > 0:
+                        await bot.redis.hset('guilds', mapping=update_guild)
+                    get_pages(i, embeds.guild)
+            elif endpoint == 'pets':
+                for i in res:
+                    get_pages(i, embeds.pet)
+            elif endpoint == 'children':
+                entries = utils.pager(res, 6)
+                for i in entries:
+                    get_pages(i, embeds.children)
+            elif endpoint == 'loot':
+                entries = utils.pager(res, 6)
+                for i in entries:
+                    get_pages(i, embeds.loot)
+            if len(pages) == 1:
+                await send_message.send(embed=pages[0])
+            else:
+                return await Paginator(extras=pages, text='{0} entries found.'.format(len(res))).paginate(ctx)
+
+async def _get_raidstats(bot, ctx: Union[commands.Context, discord.Interaction], start: float, end: float):
+    if isinstance(ctx, discord.Interaction): await ctx.response.defer(thinking=True)
+    start += 0.1
+    total, res = 0, []
+    for i in range(int(10 * start), int(10 * end) + 1):
+        cost = sum(j * 25000 for j in range(1, i - 9))
+        total += cost
+        res.append((round(i/10,1), cost))
+    return await Paginator(
+        entries=res,
+        parser=lambda x: str(round(x[0]-0.1,1)).rjust(4) + ' \u2192 ' + str(round(x[0],1)).rjust(4) + ' : ' + ('$' + intcomma(x[1])).rjust(15),
+        title='Raidstats price',
+        codeblock=True,
+        length=10,
+        footer=f'Total cost: ${intcomma(total)}',
+        color=random.getrandbits(24)
+    ).paginate(ctx)
+
+async def _get_xp(bot, ctx: Union[commands.Context, discord.Interaction], target: Optional[Union[discord.User, int]], ephemeral: bool = False):
+    if isinstance(ctx, discord.Interaction):
+        await ctx.response.defer(thinking=True, ephemeral=ephemeral)
+        send_message = ctx.followup
+        user = ctx.user
+    else:
+        send_message = ctx
+        user = ctx.author
+    if target is None:
+        level_table = []
+        for i in range(0, len(idle.levels)):
+            level_table += [
+                'Level {}'.format((i+1)).ljust(12) + ('Beginner' if i == 0 else intcomma(idle.levels[i])).rjust(12)
+            ]
+        return await Paginator(
+            title='Level table',
+            entries=level_table,
+            length=10,
+            codeblock=True,
+            color=random.getrandbits(24)
+        ).paginate(ctx)
+    elif isinstance(target, (discord.Member, discord.User)):
+        user = target
+        (res, status) = await bot.idle_query(idle.queries['xp'].format(id=user.id), ctx)
         if status == 429:
             raise errors.TooManyRequests(ctx)
         elif status != 200 or res is None:
-            return await send_message.send('An error has occurred while trying to fetch data from the server (Code {}).'.format(status))
+            return await send_message.send('An error has occurred while trying to fetch data from the server.')
+        elif len(res) == 0:
+            return await send_message.send('{} does not have a profile.'.format(user.mention))
         else:
-            endpoint = query[:query.index('?')] if len(query) > 0 and '?' in query else 'query'
-            get_embed = len(query) > 0 and ('select=' not in query or 'select=*' in query) and '?' in query
-            await send_message.send(
-                '{0} entries found.'.format((len(res))),
-                file=discord.File(
-                    filename='{}.txt'.format(endpoint),
-                    fp=BytesIO(pformat(res).encode())
-                )
+            value = res[0]['xp']
+    else:
+        value = target
+    lvl = utils.getlevel(value)
+    embed = discord.Embed(
+        title=f'XP statistics (Lv. {lvl})',
+        color=random.getrandbits(24),
+        timestamp=discord.utils.utcnow()
+    ).set_footer(
+        text=user.name, icon_url=user.display_avatar.url
+    )
+    if lvl < 25:
+        embed.add_field(
+            name='To {}'.format('next evolution' if lvl > 11 else 'second class'),
+            value='{} XP\n{} lv1 adv (375 XP/adv)\n{} days (48 a1s/day)'.format(
+                intcomma(a := utils.getnextevol(value)), intcomma(b:= a / 375, 2), intcomma(b / 48, 2) # type: ignore
             )
-            if get_embed and len(res):
-                pages = []
-                def get_pages(data, embed_builder):
-                    embed = embed_builder(data)
-                    embed.set_footer(text=(embed.footer.text or author.name), icon_url=author.display_avatar.url)
-                    pages.append(embed)
-                if endpoint == 'profile':
-                    for i in res:
-                        weapons = await self.bot.pool.fetchval(postgres.queries['fetch_weapons'], i['user']) or []
-                        embed = embeds.profile(self.bot, i, weapons)
-                        embed.set_footer(text=(embed.footer.text or author.name), icon_url=author.display_avatar.url)
-                        pages.append(embed)
-                elif endpoint == 'allitems':
-                    entries = utils.pager(res, 5)
-                    for i in entries:
-                        get_pages(i, embeds.items)
-                elif endpoint == 'guild':
-                    update_guild = {}
-                    for i in res:
-                        if str(i['id']) not in update_guild:
-                            self.bot.idle_guilds[str(i['id'])] = [i['name'], i['leader'], i['alliance']]
-                            update_guild[str(i['id'])] = json.dumps([i['name'], i['leader'], i['alliance']])
-                        if len(update_guild) > 0:
-                            await self.bot.redis.hset('guilds', mapping=update_guild)
-                        get_pages(i, embeds.guild)
-                elif endpoint == 'pets':
-                    for i in res:
-                        get_pages(i, embeds.pet)
-                elif endpoint == 'children':
-                    entries = utils.pager(res, 6)
-                    for i in entries:
-                        get_pages(i, embeds.children)
-                elif endpoint == 'loot':
-                    entries = utils.pager(res, 6)
-                    for i in entries:
-                        get_pages(i, embeds.loot)
-                if len(pages) == 1:
-                    await send_message.send(embed=pages[0])
-                else:
-                    return await Paginator(extras=pages, text='{0} entries found.'.format(len(res))).paginate(ctx)
-
-    async def _get_raidstats(self, ctx: Union[commands.Context, discord.Interaction], start: float, end: float):
-        if isinstance(ctx, discord.Interaction): await ctx.response.defer(thinking=True)
-        start += 0.1
-        total, res = 0, []
-        for i in range(int(10 * start), int(10 * end) + 1):
-            cost = sum(j * 25000 for j in range(1, i - 9))
-            total += cost
-            res.append((round(i/10,1), cost))
-        return await Paginator(
-            entries=res,
-            parser=lambda x: str(round(x[0]-0.1,1)).rjust(4) + ' \u2192 ' + str(round(x[0],1)).rjust(4) + ' : ' + ('$' + intcomma(x[1])).rjust(15),
-            title='Raidstats price',
-            codeblock=True,
-            length=10,
-            footer=f'Total cost: ${intcomma(total)}',
-            color=random.getrandbits(24)
-        ).paginate(ctx)
-
-    async def _get_xp(self, ctx: Union[commands.Context, discord.Interaction], target: Optional[Union[discord.User, int]], ephemeral: bool = False):
-        if isinstance(ctx, discord.Interaction):
-            await ctx.response.defer(thinking=True, ephemeral=ephemeral)
-            send_message = ctx.followup
-            user = ctx.user
-        else:
-            send_message = ctx
-            user = ctx.author
-        if target is None:
-            level_table = []
-            for i in range(0, len(idle.levels)):
-                level_table += [
-                    'Level {}'.format((i+1)).ljust(12) + ('Beginner' if i == 0 else intcomma(idle.levels[i])).rjust(12)
-                ]
-            return await Paginator(
-                title='Level table',
-                entries=level_table,
-                length=10,
-                codeblock=True,
-                color=random.getrandbits(24)
-            ).paginate(ctx)
-        elif isinstance(target, (discord.Member, discord.User)):
-            user = target
-            (res, status) = await self.bot.idle_query(idle.queries['xp'].format(id=user.id), ctx)
-            if status == 429:
-                raise errors.TooManyRequests(ctx)
-            elif status != 200 or res is None:
-                return await send_message.send('An error has occurred while trying to fetch data from the server.')
-            elif len(res) == 0:
-                return await send_message.send('{} does not have a profile.'.format(user.mention))
-            else:
-                value = res[0]['xp']
-        else:
-            value = target
-        lvl = utils.getlevel(value)
-        embed = discord.Embed(
-            title=f'XP statistics (Lv. {lvl})',
-            color=random.getrandbits(24),
-            timestamp=discord.utils.utcnow()
-        ).set_footer(
-            text=user.name, icon_url=user.display_avatar.url
         )
-        if lvl < 25:
-            embed.add_field(
-                name='To {}'.format('next evolution' if lvl > 11 else 'second class'),
-                value='{} XP\n{} lv1 adv (375 XP/adv)\n{} days (48 a1s/day)'.format(
-                    intcomma(a := utils.getnextevol(value)), intcomma(b:= a / 375, 2), intcomma(b / 48, 2) # type: ignore
-                )
+    if lvl < 29:
+        embed.insert_field_at(0,
+            name='To next level',
+            value='{} XP\n{} lv1 adv (375 XP/adv)\n{} days (48 a1s/day)'.format(
+                intcomma(a := utils.getnextlevel(value)), intcomma(b:= a / 375, 2), intcomma(b / 48, 2) # type: ignore
             )
-        if lvl < 29:
-            embed.insert_field_at(0,
-                name='To next level',
-                value='{} XP\n{} lv1 adv (375 XP/adv)\n{} days (48 a1s/day)'.format(
-                    intcomma(a := utils.getnextlevel(value)), intcomma(b:= a / 375, 2), intcomma(b / 48, 2) # type: ignore
-                )
+        )
+    if lvl < 30:
+        embed.add_field(
+            name='To level 30',
+            value='{} XP\n{} lv1 adv (375 XP/adv)\n{} days (48 a1s/day)'.format(
+                intcomma(a := utils.getto30(value)), intcomma(b:= a / 375, 2), intcomma(b / 48, 2)
             )
-        if lvl < 30:
-            embed.add_field(
-                name='To level 30',
-                value='{} XP\n{} lv1 adv (375 XP/adv)\n{} days (48 a1s/day)'.format(
-                    intcomma(a := utils.getto30(value)), intcomma(b:= a / 375, 2), intcomma(b / 48, 2)
-                )
-            )
-        else:
-            embed.description = 'Already at max level.'
-        await send_message.send(embed=embed)
+        )
+    else:
+        embed.description = 'Already at max level.'
+    await send_message.send(embed=embed)
 
-    async def _get_missions(self, ctx: Union[commands.Context, discord.Interaction], user: Union[discord.Member, discord.User], level: Optional[int], booster: bool, building: int):
-        if isinstance(ctx, discord.Interaction):
-            await ctx.response.defer(thinking=True)
-            send_message = ctx.followup
-            author = ctx.user
-            bot = ctx.client
-        else:
-            send_message = ctx
-            author = ctx.author
-            bot = ctx.bot
-        try:
-            equipped, profile, _ = await self.bot.get_equipped(user.id, ctx, True)
-        except errors.ApiIsDead:
-            profile, equipped = {}, []
-        if profile is not None:
-            p = Profile(data=profile, weapons=equipped)
-            def calcchance(lvl):
-                chances = utils.adv_success(p, lvl, booster, building)
-                if chances is None: return None
-                chances.sort()
-                chance = 0
-                for c in chances:
-                    if c >= 100:
-                        chance += 1
-                    elif c >= 0:
-                        chance += (c+1)/101
-                return [chances, round(100 * chance / len(chances), 2)]
-            if level:
-                chance = calcchance(level)
-                time = datetime.timedelta(hours=level * (1 - building / 100))
-                if chance is not None:
-                    descriptions = '\n'.join([
-                        ', '.join(map(lambda x: f'{x}', chance[0][i:i+5])) for i in range(0,len(chance[0]), 5)
-                    ])
-                    embed = discord.Embed(
-                        title='Adventure {} - {}'.format(level, idle.adventures[level - 1]),
-                        description=(
-                            f'For the adventure to succeed, a random number between `[0, 100]` '
-                            f'picked by the bot has to be less than or equal to one of these numbers:'
-                            f'```\n{descriptions}\n```'
-                            f'The chance of that happening is: {chance[1]}%'
-                        ),
-                        color=random.getrandbits(24),
-                        timestamp=discord.utils.utcnow()
-                    ).set_footer(
-                        text=user.name, icon_url=author.display_avatar.url
-                    ).add_field(
-                        name='Duration', value='\n'.join([
-                            'Regular player: *{}* (*{}* with time booster)'.format(precisedelta(time, suppress=['days']), precisedelta(time * 0.5, suppress=['days'])),
-                            'Silver donator: *{}* (*{}* with time booster)'.format(precisedelta(time * 0.95, suppress=['days']), precisedelta(time * 0.5 * 0.95, suppress=['days'])),
-                            'Gold donator: *{}* (*{}* with time booster)'.format(precisedelta(time * 0.9, suppress=['days']), precisedelta(time * 0.5 * 0.9, suppress=['days'])),
-                            'Emerald donator: *{}* (*{}* with time booster)'.format(precisedelta(time * 0.75, suppress=['days']), precisedelta(time * 0.5 * 0.75, suppress=['days'])),
-                        ]),
-                    )
-                    return await send_message.send(embed=embed)
-                else:
-                    embed = discord.Embed(
-                        title='Adventure {} - {}'.format(level, idle.adventures[level - 1]),
-                        description='The bot might crash if you attempt to finish this adventure while your luck is 0.0',
-                        color=random.getrandbits(24),
-                        timestamp=discord.utils.utcnow()
-                    ).set_footer(
-                        text=user.name, icon_url=author.display_avatar.url
-                    ).add_field(
-                        name='Duration', value='\n'.join([
-                            'Regular player: *{}* (*{}* with time booster)'.format(precisedelta(time, suppress=['days']), precisedelta(time * 0.5, suppress=['days'])),
-                            'Silver donator: *{}* (*{}* with time booster)'.format(precisedelta(time * 0.95, suppress=['days']), precisedelta(time * 0.5 * 0.95, suppress=['days'])),
-                            'Gold donator: *{}* (*{}* with time booster)'.format(precisedelta(time * 0.9, suppress=['days']), precisedelta(time * 0.5 * 0.9, suppress=['days'])),
-                            'Emerald donator: *{}* (*{}* with time booster)'.format(precisedelta(time * 0.75, suppress=['days']), precisedelta(time * 0.5 * 0.75, suppress=['days'])),
-                        ]),
-                    )
-                    return await send_message.send(embed=embed)
-            else:
-                all_adventures = []
-                for i in range(len(idle.adventures)):
-                    c = calcchance(i+1)
-                    if c is not None: all_adventures += [
-                        '\n'.join([
-                            '**Adventure {}** - {}'.format(i+1, idle.adventures[i]),
-                            'Duration: *{}*'.format(precisedelta(datetime.timedelta(hours=(i+1) * (1 - building / 100)), suppress=['days'])),
-                            'Success range: *{}% - {}%*'.format(min(c[0]), max(c[0])),
-                            'Success chance: {}%'.format(c[1]),
-                            ''
-                        ])
-                    ]
-                async def customnav(ctx):
-                    def valid(msg):
-                        if msg.guild and msg.channel.id == ctx.channel.id and msg.author.id == author.id and msg.content.isdecimal():
-                            pg = int(msg.content)
-                            return pg >= 1 and pg <= 30
-                        return False
-                    prompt = await ctx.channel.send('Select a mission level')
-                    try:
-                        jumpto = await bot.wait_for('message', check=valid, timeout=15)
-                    except asyncio.TimeoutError:
-                        await prompt.delete()
-                        msg = await ctx.channel.send('You did not enter a valid level.')
-                        await msg.delete(delay=10)
-                        return None
-                    await prompt.delete()
-                    pnum = (int(jumpto.content) - 1) // 5
-                    await jumpto.delete()
-                    return pnum
-                return await Paginator(
-                    title='{}\'s success chance'.format(user.name),
-                    entries=all_adventures,
-                    length=5,
+async def _get_missions(bot, ctx: Union[commands.Context, discord.Interaction], user: Union[discord.Member, discord.User], level: Optional[int], booster: bool, building: int):
+    if isinstance(ctx, discord.Interaction):
+        await ctx.response.defer(thinking=True)
+        send_message = ctx.followup
+        author = ctx.user
+    else:
+        send_message = ctx
+        author = ctx.author
+    try:
+        p = await bot.get_equipped(user.id, ctx, False)
+    except errors.ApiIsDead:
+        p = None
+    if p:
+        def calcchance(lvl):
+            chances = utils.adv_success(p, lvl, booster, building)
+            if chances is None: return None
+            chances.sort()
+            chance = 0
+            for c in chances:
+                if c >= 100:
+                    chance += 1
+                elif c >= 0:
+                    chance += (c+1)/101
+            return [chances, round(100 * chance / len(chances), 2)]
+        if level:
+            chance = calcchance(level)
+            time = datetime.timedelta(hours=level * (1 - building / 100))
+            if chance is not None:
+                descriptions = '\n'.join([
+                    ', '.join(map(lambda x: f'{x}', chance[0][i:i+5])) for i in range(0,len(chance[0]), 5)
+                ])
+                embed = discord.Embed(
+                    title='Adventure {} - {}'.format(level, idle.adventures[level - 1]),
+                    description=(
+                        f'For the adventure to succeed, a random number between `[0, 100]` '
+                        f'picked by the bot has to be less than or equal to one of these numbers:'
+                        f'```\n{descriptions}\n```'
+                        f'The chance of that happening is: {chance[1]}%'
+                    ),
                     color=random.getrandbits(24),
-                    customnav=customnav
-                ).paginate(ctx)
+                    timestamp=discord.utils.utcnow()
+                ).set_footer(
+                    text=user.name, icon_url=author.display_avatar.url
+                ).add_field(
+                    name='Duration', value='\n'.join([
+                        'Regular player: *{}* (*{}* with time booster)'.format(precisedelta(time, suppress=['days']), precisedelta(time * 0.5, suppress=['days'])),
+                        'Silver donator: *{}* (*{}* with time booster)'.format(precisedelta(time * 0.95, suppress=['days']), precisedelta(time * 0.5 * 0.95, suppress=['days'])),
+                        'Gold donator: *{}* (*{}* with time booster)'.format(precisedelta(time * 0.9, suppress=['days']), precisedelta(time * 0.5 * 0.9, suppress=['days'])),
+                        'Emerald donator: *{}* (*{}* with time booster)'.format(precisedelta(time * 0.75, suppress=['days']), precisedelta(time * 0.5 * 0.75, suppress=['days'])),
+                    ]),
+                )
+                return await send_message.send(embed=embed)
+            else:
+                embed = discord.Embed(
+                    title='Adventure {} - {}'.format(level, idle.adventures[level - 1]),
+                    description='The bot might crash if you attempt to finish this adventure while your luck is 0.0',
+                    color=random.getrandbits(24),
+                    timestamp=discord.utils.utcnow()
+                ).set_footer(
+                    text=user.name, icon_url=author.display_avatar.url
+                ).add_field(
+                    name='Duration', value='\n'.join([
+                        'Regular player: *{}* (*{}* with time booster)'.format(precisedelta(time, suppress=['days']), precisedelta(time * 0.5, suppress=['days'])),
+                        'Silver donator: *{}* (*{}* with time booster)'.format(precisedelta(time * 0.95, suppress=['days']), precisedelta(time * 0.5 * 0.95, suppress=['days'])),
+                        'Gold donator: *{}* (*{}* with time booster)'.format(precisedelta(time * 0.9, suppress=['days']), precisedelta(time * 0.5 * 0.9, suppress=['days'])),
+                        'Emerald donator: *{}* (*{}* with time booster)'.format(precisedelta(time * 0.75, suppress=['days']), precisedelta(time * 0.5 * 0.75, suppress=['days'])),
+                    ]),
+                )
+                return await send_message.send(embed=embed)
         else:
             all_adventures = []
             for i in range(len(idle.adventures)):
-                all_adventures += ['\n'.join([
-                    '**Adventure {}** - {}'.format(i+1, idle.adventures[i]),
-                    'Duration: *{}*'.format(precisedelta(datetime.timedelta(hours=(i+1) * (1 - building / 100)), suppress=['days'])),
-                    '',
-                ])]
+                c = calcchance(i+1)
+                if c is not None: all_adventures += [
+                    '\n'.join([
+                        '**Adventure {}** - {}'.format(i+1, idle.adventures[i]),
+                        'Duration: *{}*'.format(precisedelta(datetime.timedelta(hours=(i+1) * (1 - building / 100)), suppress=['days'])),
+                        'Success range: *{}% - {}%*'.format(min(c[0]), max(c[0])),
+                        'Success chance: {}%'.format(c[1]),
+                        ''
+                    ])
+                ]
             async def customnav(ctx):
                 def valid(msg):
                     if msg.guild and msg.channel.id == ctx.channel.id and msg.author.id == author.id and msg.content.isdecimal():
@@ -1748,99 +1763,132 @@ class General(commands.Cog):
                 color=random.getrandbits(24),
                 customnav=customnav
             ).paginate(ctx)
+    else:
+        all_adventures = []
+        for i in range(len(idle.adventures)):
+            all_adventures += ['\n'.join([
+                '**Adventure {}** - {}'.format(i+1, idle.adventures[i]),
+                'Duration: *{}*'.format(precisedelta(datetime.timedelta(hours=(i+1) * (1 - building / 100)), suppress=['days'])),
+                '',
+            ])]
+        async def customnav(ctx):
+            def valid(msg):
+                if msg.guild and msg.channel.id == ctx.channel.id and msg.author.id == author.id and msg.content.isdecimal():
+                    pg = int(msg.content)
+                    return pg >= 1 and pg <= 30
+                return False
+            prompt = await ctx.channel.send('Select a mission level')
+            try:
+                jumpto = await bot.wait_for('message', check=valid, timeout=15)
+            except asyncio.TimeoutError:
+                await prompt.delete()
+                msg = await ctx.channel.send('You did not enter a valid level.')
+                await msg.delete(delay=10)
+                return None
+            await prompt.delete()
+            pnum = (int(jumpto.content) - 1) // 5
+            await jumpto.delete()
+            return pnum
+        return await Paginator(
+            title='{}\'s success chance'.format(user.name),
+            entries=all_adventures,
+            length=5,
+            color=random.getrandbits(24),
+            customnav=customnav
+        ).paginate(ctx)
 
-    async def _get_activity(self, ctx: Union[commands.Context, discord.Interaction], inactive: bool, gid = None):
-        if isinstance(ctx, discord.Interaction):
-            await ctx.response.defer(thinking=True)
-            send_message = ctx.followup
-            user = ctx.user
-        else:
-            send_message = ctx
-            user = ctx.author
-        gid = gid or await self.bot.pool.fetchval('SELECT guild FROM profile3 WHERE uid=$1', user.id)
-        if gid is None or gid not in idle.weapon_fetching_guilds:
-            return await send_message.send('Your data has not been updated.')
-        (res, status) = await self.bot.idle_query(idle.queries['guild'].format(id=gid, custom='xp,completed,deaths'), ctx)
-        if status == 429:
-            raise errors.TooManyRequests(ctx)
-        elif status != 200 or res is None:
-            return await send_message.send('An error has occurred while trying to fetch data from the server (Code {}).'.format(status))
-        elif len(res) == 0:
-            return await send_message.send('This guild no longer exists.')
-        else:
-            timestamp = discord.utils.utcnow()
-            data = [[i['user'], i['xp'], i['completed'] + i['deaths'], None] for i in res]
-            for line in data:
-                activity_data = await self.bot.pool.fetchval(postgres.queries['get_activity'], line[0])
-                if activity_data is not None:
-                    line[1], line[2], line[3] = line[1] - activity_data[0], line[2] - activity_data[1], activity_data[2]
-            active_members = [u for u in data if u[3] and not u[1] + u[2] == 0 and u[3].year != 1970]
-            idle_members = [u for u in data if u[3] and u[1] + u[2] == 0 and u[3] + datetime.timedelta(days=3) > discord.utils.utcnow()]
-            inactive_members = [u for u in data if u[3] and u[1] + u[2] == 0 and u[3] + datetime.timedelta(days=3) <= discord.utils.utcnow() and u[3].year != 1970]
-            new_members = [u for u in data if (not u[3] or u[3].year == 1970)]
-            active_list, idle_list, added_list, pages = [], [], [], []
-            inactive_members.sort(key=lambda x: x[3])
-            inactive_list = utils.pager(inactive_members, 10)
-            if not inactive:
-                active_members.sort(key=lambda x: x[1], reverse=True)
-                active_list = utils.pager(active_members, 10)
-                idle_members.sort(key=lambda x: x[3])
-                idle_list = utils.pager(idle_members, 10)
-                added_list = utils.pager(new_members, 10)
-            for i in active_list:
-                embed = discord.Embed(
-                    title='{} active members ({})'.format(self.bot.idle_guilds[str(gid)][0], len(active_members)),
-                    description='\n'.join([
-                        '<@{user}>{member} gained {xp}XP after {adv} adventure(s) since <t:{time}:R> {avg}'.format(
-                            user=line[0],
-                            member='' if (m:=ctx.guild.get_member(int(line[0]))) is None else ' ({}#{})'.format(m.name, m.discriminator),  # type: ignore
-                            xp=intcomma(line[1]),
-                            adv=line[2],
-                            time=int(line[3].timestamp()),
-                            avg = '' if line[2] == 0 else '\n> ({}XP/adventure)'.format(intcomma(round(line[1]/line[2])))
-                        ) for line in i
-                    ]),
-                    timestamp=timestamp,
-                    color=0x70ff96
-                )
-                pages.append(embed)
-            for i in idle_list:
-                embed = discord.Embed(
-                    title='{} idle members ({})'.format(self.bot.idle_guilds[str(gid)][0], len(idle_members)),
-                    description='\n'.join([
-                        '<@{}>{} has not finished any adventure since <t:{}:R>.'.format(
-                            line[0],
-                            '' if (m:=ctx.guild.get_member(int(line[0]))) is None else ' ({}#{})'.format(m.name, m.discriminator),  # type: ignore
-                            int(line[3].timestamp())
-                        ) for line in i
-                    ]),
-                    timestamp=timestamp,
-                    color=0xf5bf42
-                )
-                pages.append(embed)
-            for i in inactive_list:
-                embed = discord.Embed(
-                    title='{} inactive members ({})'.format(self.bot.idle_guilds[str(gid)][0], len(inactive_members)),
-                    description='\n'.join([
-                        '<@{}>{} has not finished any adventure since <t:{}:R>.'.format(
-                            line[0],
-                            '' if (m:=ctx.guild.get_member(int(line[0]))) is None else ' ({}#{})'.format(m.name, m.discriminator),  # type: ignore
-                            int(line[3].timestamp())
-                        ) for line in i
-                    ]),
-                    timestamp=timestamp,
-                    color=0xba1111
-                )
-                pages.append(embed)
-            for i in added_list:
-                embed = discord.Embed(
-                    title='{} new members ({})'.format(self.bot.idle_guilds[str(gid)][0], len(new_members)),
-                    description='\n'.join(['<@{}>\'s data is less than 2 days old.'.format(line[0]) for line in i]),
-                    timestamp=timestamp,
-                    color=0x57fff1
-                )
-                pages.append(embed)
-            return await Paginator(extras=pages).paginate(ctx)
+async def _get_activity(bot, ctx: Union[commands.Context, discord.Interaction], inactive: bool, gid = None):
+    if isinstance(ctx, discord.Interaction):
+        await ctx.response.defer(thinking=True)
+        send_message = ctx.followup
+        user = ctx.user
+    else:
+        send_message = ctx
+        user = ctx.author
+    gid = gid or await bot.pool.fetchval('SELECT guild FROM profile3 WHERE uid=$1', user.id)
+    if gid is None or gid not in idle.weapon_fetching_guilds:
+        return await send_message.send('Your data has not been updated.')
+    (res, status) = await bot.idle_query(idle.queries['guild'].format(id=gid, custom='xp,completed,deaths'), ctx)
+    if status == 429:
+        raise errors.TooManyRequests(ctx)
+    elif status != 200 or res is None:
+        return await send_message.send('An error has occurred while trying to fetch data from the server (Code {}).'.format(status))
+    elif len(res) == 0:
+        return await send_message.send('This guild no longer exists.')
+    else:
+        timestamp = discord.utils.utcnow()
+        data = [[i['user'], i['xp'], i['completed'] + i['deaths'], None] for i in res]
+        for line in data:
+            activity_data = await bot.pool.fetchval(postgres.queries['get_activity'], line[0])
+            if activity_data is not None:
+                line[1], line[2], line[3] = line[1] - activity_data[0], line[2] - activity_data[1], activity_data[2]
+        active_members = [u for u in data if u[3] and not u[1] + u[2] == 0 and u[3].year != 1970]
+        idle_members = [u for u in data if u[3] and u[1] + u[2] == 0 and u[3] + datetime.timedelta(days=3) > discord.utils.utcnow()]
+        inactive_members = [u for u in data if u[3] and u[1] + u[2] == 0 and u[3] + datetime.timedelta(days=3) <= discord.utils.utcnow() and u[3].year != 1970]
+        new_members = [u for u in data if (not u[3] or u[3].year == 1970)]
+        active_list, idle_list, added_list, pages = [], [], [], []
+        inactive_members.sort(key=lambda x: x[3])
+        inactive_list = utils.pager(inactive_members, 10)
+        if not inactive:
+            active_members.sort(key=lambda x: x[1], reverse=True)
+            active_list = utils.pager(active_members, 10)
+            idle_members.sort(key=lambda x: x[3])
+            idle_list = utils.pager(idle_members, 10)
+            added_list = utils.pager(new_members, 10)
+        for i in active_list:
+            embed = discord.Embed(
+                title='{} active members ({})'.format(bot.idle_guilds[str(gid)][0], len(active_members)),
+                description='\n'.join([
+                    '<@{user}>{member} gained {xp}XP after {adv} adventure(s) since <t:{time}:R> {avg}'.format(
+                        user=line[0],
+                        member='' if (m:=ctx.guild.get_member(int(line[0]))) is None else ' ({}#{})'.format(m.name, m.discriminator),  # type: ignore
+                        xp=intcomma(line[1]),
+                        adv=line[2],
+                        time=int(line[3].timestamp()),
+                        avg = '' if line[2] == 0 else '\n> ({}XP/adventure)'.format(intcomma(round(line[1]/line[2])))
+                    ) for line in i
+                ]),
+                timestamp=timestamp,
+                color=0x70ff96
+            )
+            pages.append(embed)
+        for i in idle_list:
+            embed = discord.Embed(
+                title='{} idle members ({})'.format(bot.idle_guilds[str(gid)][0], len(idle_members)),
+                description='\n'.join([
+                    '<@{}>{} has not finished any adventure since <t:{}:R>.'.format(
+                        line[0],
+                        '' if (m:=ctx.guild.get_member(int(line[0]))) is None else ' ({}#{})'.format(m.name, m.discriminator),  # type: ignore
+                        int(line[3].timestamp())
+                    ) for line in i
+                ]),
+                timestamp=timestamp,
+                color=0xf5bf42
+            )
+            pages.append(embed)
+        for i in inactive_list:
+            embed = discord.Embed(
+                title='{} inactive members ({})'.format(bot.idle_guilds[str(gid)][0], len(inactive_members)),
+                description='\n'.join([
+                    '<@{}>{} has not finished any adventure since <t:{}:R>.'.format(
+                        line[0],
+                        '' if (m:=ctx.guild.get_member(int(line[0]))) is None else ' ({}#{})'.format(m.name, m.discriminator),  # type: ignore
+                        int(line[3].timestamp())
+                    ) for line in i
+                ]),
+                timestamp=timestamp,
+                color=0xba1111
+            )
+            pages.append(embed)
+        for i in added_list:
+            embed = discord.Embed(
+                title='{} new members ({})'.format(bot.idle_guilds[str(gid)][0], len(new_members)),
+                description='\n'.join(['<@{}>\'s data is less than 2 days old.'.format(line[0]) for line in i]),
+                timestamp=timestamp,
+                color=0x57fff1
+            )
+            pages.append(embed)
+        return await Paginator(extras=pages).paginate(ctx)
 
 async def setup(bot):
     await bot.add_cog(General(bot))

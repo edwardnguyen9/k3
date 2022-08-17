@@ -7,7 +7,7 @@ MAX_RAID_BUILDING = [2807, 8244, 13992, 6055, 17555, 3960, 20314, 15356, 19599, 
 
 class Profile:
     def __init__(self, *, data = {}, user = None, race = 'Human', classes = [], guild = -1, raidstats = [1,1], xp = 0, completed = 0, deaths = 0, weapons = []):
-        self.name = data['name'] if 'name' in data else user.name if user else ''
+        self.name = data['name'] if 'name' in data else user.display_name if isinstance(user, discord.abc.Snowflake) else ''  # type: ignore
         self.user = data['user'] if 'user' in data else user
         self.race = data['race'] if 'race' in data else race
         self.classes = [idle.classes[i] for i in data['class'] if i in idle.classes] if 'class' in data else classes
@@ -20,11 +20,11 @@ class Profile:
         self.weapons = weapons
         self.new = True
 
-    def fighter_data(self):
+    def fighter_data(self, weapons: bool = True):
         dmg, amr = utils.get_race_bonus(self.race)
         dmg += utils.get_class_bonus('dmg', self.classes)
         amr += utils.get_class_bonus('amr', self.classes)
-        if len(self.weapons) > 0:
+        if weapons and len(self.weapons) > 0:
             if isinstance(self.weapons[0], list):
                 dmg += sum([int(i[2]) for i in self.weapons if i[1] != 'Shield']) + utils.get_weapon_bonus(self.weapons, self.classes)
                 amr += sum([int(i[2]) for i in self.weapons if i[1] == 'Shield'])
@@ -54,7 +54,6 @@ class Profile:
             'SELECT race, classes, weapon, guild, raidstats FROM profile3 WHERE uid=$1',
             uid
         )
-        # print(res, data)
         if res:
             p = Profile(
                 user=uid,

@@ -7,9 +7,10 @@ from typing import Optional
 
 from bot.bot import Kiddo
 from assets import idle, postgres, config
-from utils import utils, embeds, errors
+from utils import utils, embeds, errors, checks  # type: ignore
 
-@app_commands.default_permissions(kick_members=True)
+@checks.guild_bill()
+@checks.mod_only()
 class Auto(commands.GroupCog, group_name='update'):
     def __init__(self, bot: Kiddo):
         self.bot = bot
@@ -111,7 +112,6 @@ class Auto(commands.GroupCog, group_name='update'):
 
     @tasks.loop(minutes=3)
     async def market_scan(self):
-        if self.market_scan.is_running(): return
         ms_history = await self.bot.redis.hgetall('scan:market')
         moved, removed, update_price, update_date, unchanged, sold, new = {}, {}, {}, {}, {}, {}, {}
         old_ids, ignore_ids, notification = [], [], []
@@ -251,7 +251,6 @@ class Auto(commands.GroupCog, group_name='update'):
         datetime.time(hour=3 + i//2, minute=30 * i % 2) for i in range(40)
     ])
     async def update_stats(self):
-        if self.update_stats.is_running(): return
         for guild in idle.weapon_fetching_guilds:
             day = await self.bot.redis.hget('scan:weapons', str(guild))
             if not day or int(day) != discord.utils.utcnow().day:
@@ -281,11 +280,8 @@ class Auto(commands.GroupCog, group_name='update'):
         Manually fetch member activity data
         '''
         await interaction.response.defer(thinking=True, ephemeral=True)
-        if self.update_activity.is_running():
-            await interaction.followup.send('This task is already running.')
-        else:
-            res = await self.update_guild_activity()
-            await interaction.followup.send('Activity updated {}successfully.'.format('' if res else 'un'))
+        res = await self.update_guild_activity()
+        await interaction.followup.send('Activity updated {}successfully.'.format('' if res else 'un'))
 
     @app_commands.describe(guild='The guild to fetch')
     @app_commands.choices(
@@ -462,7 +458,7 @@ class Auto(commands.GroupCog, group_name='update'):
                 timestamp=time
             ).set_footer(
                 text='This bot only registers donations made in #{.name}.'.format(log_channel),
-                icon_url=log_channel.guild.icon_url
+                icon_url=log_channel.guild.icon.url
             )
             total_donation = 0
             fields = {}
@@ -519,7 +515,7 @@ class Auto(commands.GroupCog, group_name='update'):
                 timestamp=time
             ).set_footer(
                 text='This bot only registers donations made in #{.name}.'.format(log_channel),
-                icon_url=log_channel.guild.icon_url
+                icon_url=log_channel.guild.icon.url
             )
 
             embed.description = 'First entry: <t:{}:F>\nTotal donation: **${:,d}**\nLast updated: <t:{}>'.format(int(log_started.timestamp()), total_donation, int(time.timestamp()))

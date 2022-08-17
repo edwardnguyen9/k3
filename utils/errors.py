@@ -7,6 +7,14 @@ class KiddoException(commands.CommandInvokeError, discord.app_commands.CommandIn
     def __init__(self, ctx):
         self.context = ctx
 
+class NoDm(KiddoException):
+    """ Exception raised for commands that cannot be used in DM """
+    def __init__(self, ctx):
+        self.context = ctx
+
+    def __str__(self):
+        return 'This command can only be used in a server.'
+
 class SlashOnly(KiddoException):
     """ Exception raised for commands that have been moved to slash """
     def __init__(self, ctx):

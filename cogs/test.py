@@ -1,5 +1,5 @@
-import discord, datetime
-from discord.ext import commands
+import discord, datetime, asyncio
+from discord.ext import commands, tasks
 
 from classes import ui
 from utils import utils  # type: ignore
@@ -8,13 +8,21 @@ class Test(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.is_first_ready = True
+        self.counter = 0
 
     @commands.Cog.listener()
     async def on_ready(self):
         if self.is_first_ready:
+            # self.looptest.start()
             print(self.__class__.__name__, 'is ready')
             self.is_first_ready = False
 
+    @tasks.loop(seconds=10)
+    async def looptest(self, pending = 0):
+        await asyncio.sleep(pending)
+        if not self.looptest.is_running():
+            self.counter += 1
+            print(self.counter)
     
     @discord.app_commands.command()
     async def ask(self, interaction: discord.Interaction):
@@ -41,12 +49,12 @@ class Test(commands.Cog):
         await interaction.followup.send(f.feedback)  # type: ignore
 
     @commands.command(name='test')
-    async def _test(self, ctx: commands.Context):
-        await ctx.send('One')
-        await discord.utils.sleep_until(
-            discord.utils.utcnow() + datetime.timedelta(seconds=10),
-        )
-        await ctx.send('Three')
+    async def _test(self, interaction: commands.Context):
+        msg = []
+        button = ui.Confirm(count=msg)
+        msg.append(await interaction.send('Hello', view=button))
+        await button.wait()
+        await msg[0].edit(view=None)
 
 async def setup(bot):
     await bot.add_cog(Test(bot))
