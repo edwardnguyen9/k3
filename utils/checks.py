@@ -5,7 +5,7 @@ from discord.ext import commands
 from utils import errors
 
 def guild_bill(): return app_commands.guilds(821988363308630068)
-def api_guilds(): return app_commands.guilds(821988363308630068,637415907785965628,475033206672850945,688144867766960223,865304773828542544)
+def api_guilds(): return app_commands.guilds(821988363308630068,475033206672850945,688144867766960223,865304773828542544)
 def mod_only(): return app_commands.default_permissions(kick_members=True)
 
 def perms(app = True, *, gold=False, guild=False, mod=False, muted=True, bronze=False, sponsor=False, all=False):
@@ -16,12 +16,12 @@ def perms(app = True, *, gold=False, guild=False, mod=False, muted=True, bronze=
         else:
             author = interaction.author
             bot = interaction.bot
-        if author.id == bot.owner.id:  # type: ignore
-            return True
-        elif not isinstance(author, discord.Member):
+        # if author.id == bot.owner.id:  # type: ignore
+        #     return True
+        if not isinstance(author, discord.Member):
             raise errors.NoDm(interaction)
-        elif author.guild.id not in [821988363308630068,637415907785965628,475033206672850945,688144867766960223,865304773828542544]:
-            raise errors.InsufficientPermissions(interaction)
+        elif author.guild.id not in [821988363308630068,475033206672850945,688144867766960223,865304773828542544]:
+            raise errors.InsufficientPermissions(interaction, 'Unsupported')
         elif author.guild.id != 821988363308630068:
             if guild: raise errors.InsufficientPermissions(interaction, 'This command is disabled in **{}**'.format(author.guild.name))
             elif author.guild_permissions.manage_roles or author.guild_permissions.manage_channels:

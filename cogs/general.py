@@ -2,7 +2,6 @@ import discord, random, datetime, json, asyncio, math, matplotlib.pyplot as plt,
 from discord import app_commands
 from discord.ext import commands
 from typing import Union, Optional, Literal
-from humanize import intcomma, precisedelta
 from io import BytesIO
 from pprint import pformat
 from decimal import Decimal
@@ -11,8 +10,7 @@ from assets import idle, postgres
 from bot.bot import Kiddo
 from classes.profile import Profile
 from classes.paginator import Paginator
-from utils import command_config as config, errors, utils, embeds, queries, checks  # type: ignore
-
+from utils import command_config as config, errors, utils, embeds, queries, checks
 
 class General(commands.Cog):
     def __init__(self, bot: Kiddo):
@@ -263,6 +261,7 @@ class General(commands.Cog):
         gid = gid if ctx.author.id == self.bot.owner.id else None  # type: ignore
         await _get_activity(self.bot, ctx, inactive, gid)
 
+    @checks.perms()
     @app_commands.describe(
         user='User (override all other filters)', name='Character name',
         lvmin='Min level', lvmax='Max level', race='Character race', classes='Character class',
@@ -308,8 +307,6 @@ class General(commands.Cog):
         ],
     )
     @app_commands.command(name='profile')
-    @checks.api_guilds()
-    @checks.perms()
     async def _app_profile(
         self, interaction: discord.Interaction, user: Optional[discord.User] = None,
         name: Optional[str] = None, lvmin: Optional[app_commands.Range[int, 1, 30]] = None, lvmax: Optional[app_commands.Range[int, 1, 30]] = None,
@@ -360,7 +357,6 @@ class General(commands.Cog):
 
     @app_commands.describe(user='User')
     @app_commands.command(name='equipped')
-    @checks.api_guilds()
     @checks.perms()
     async def _app_equipped(
         self, interaction: discord.Interaction, user: Optional[discord.User] = None,
@@ -399,7 +395,6 @@ class General(commands.Cog):
         ]
     )
     @app_commands.command(name='item')
-    @checks.api_guilds()
     @checks.perms()
     async def _app_item(
         self, interaction: discord.Interaction, iid: Optional[app_commands.Range[int, 0]] = None,
@@ -465,7 +460,6 @@ class General(commands.Cog):
         ]
     )
     @app_commands.command(name='guild')
-    @checks.api_guilds()
     @checks.perms()
     async def _app_guild(
         self, interaction: discord.Interaction, gid: Optional[app_commands.Range[int, 0]] = None,
@@ -518,7 +512,6 @@ class General(commands.Cog):
     @app_commands.describe(aid='Guild ID')
     @app_commands.rename(aid='id')
     @app_commands.command(name='alliance')
-    @checks.api_guilds()
     @checks.perms()
     async def _app_alliance(
         self, interaction: discord.Interaction, aid: app_commands.Range[int, 0],
@@ -551,7 +544,6 @@ class General(commands.Cog):
         ]
     )
     @app_commands.command(name='pets')
-    @checks.api_guilds()
     @checks.perms()
     async def _app_pets(
         self, interaction: discord.Interaction,
@@ -607,7 +599,6 @@ class General(commands.Cog):
         ]
     )
     @app_commands.command(name='children')
-    @checks.api_guilds()
     @checks.perms()
     async def _app_children(
         self, interaction: discord.Interaction,
@@ -658,7 +649,6 @@ class General(commands.Cog):
         ]
     )
     @app_commands.command(name='loot')
-    @checks.api_guilds()
     @checks.perms()
     async def _app_loot(
         self, interaction: discord.Interaction,
@@ -681,7 +671,7 @@ class General(commands.Cog):
             return await Paginator(
                 entries=res,
                 title='List of loot items',
-                parser=lambda x: x[0] + ', Value : ' + intcomma(x[1]),
+                parser=lambda x: x[0] + ', Value : {:,d}'.format(x[1]),
                 footer='{0} item{1} found.'.format(len(res), 's' if len(res) > 1 else ''),
                 color=random.getrandbits(24)
             ).paginate(interaction)
@@ -704,8 +694,8 @@ class General(commands.Cog):
             elif ex:
                 value = sum([i['value'] for i in res if 'value' in i])
                 entries = utils.pager(res, 150, True)
-                await interaction.followup.send('{total} item{plural} found, ${value} in total, or {xp} XP (might be less if exchange in more than one message).'.format(
-                    total = len(res), plural = 's' if len(res) > 1 else '', value=intcomma(value), xp=intcomma(int(value/4))
+                await interaction.followup.send('{total} item{plural} found, ${value:,d} in total, or {xp:,d} XP (might be less if exchange in more than one message).'.format(
+                    total = len(res), plural = 's' if len(res) > 1 else '', value=value, xp=int(value/4)
                 ))
                 for i in entries:
                     msg = await interaction.followup.send('$ex {}'.format(' '.join(map(str, i))), wait=True)
@@ -732,7 +722,6 @@ class General(commands.Cog):
         wtype=config.auto_market_type
     )
     @app_commands.command(name='market')
-    @checks.api_guilds()
     @checks.perms()
     async def _app_market(
         self, interaction: discord.Interaction,
@@ -767,10 +756,8 @@ class General(commands.Cog):
                 pages.append(embed)
             return await Paginator(extras=pages, text='{0} entries found.'.format(len(items))).paginate(interaction)
 
-
     @app_commands.describe(query='The query to send to IdleRPG API')
     @app_commands.command(name='query')
-    @checks.api_guilds()
     @checks.perms()
     async def _app_query(self, interaction: discord.Interaction, query: Optional[str] = ''):
         '''
@@ -783,7 +770,6 @@ class General(commands.Cog):
     )
     @app_commands.rename(start='start_value', end='final_value')
     @app_commands.command(name='raidstats')
-    @checks.api_guilds()
     @checks.perms(all=True)
     async def _app_raidstats(self, interaction: discord.Interaction, start: app_commands.Range[float, 1] = 1, end: app_commands.Range[float, 1] = 10):
         '''
@@ -796,7 +782,6 @@ class General(commands.Cog):
         xp='The XP to calculate (override user filter)', user='The user to fetch'
     )
     @app_commands.command(name='xp')
-    @checks.api_guilds()
     @checks.perms()
     async def _app_xp(self, interaction: discord.Interaction, xp: Optional[app_commands.Range[int, 0]] = None, user: Optional[discord.User] = None):
         '''
@@ -816,7 +801,6 @@ class General(commands.Cog):
         booster='time_booster', building='adventure_building',
     )
     @app_commands.command(name='adventures')
-    @checks.api_guilds()
     @checks.perms()
     async def _app_missions(self, interaction: discord.Interaction,
         user: Optional[discord.User] = None, level: Optional[app_commands.Range[int, 1, 30]] = None,
@@ -833,7 +817,6 @@ class General(commands.Cog):
         ]
     )
     @app_commands.command(name='luck')
-    @checks.api_guilds()
     @checks.perms(all=True)
     async def _app_luck(self, interaction: discord.Interaction, god: Optional[str] = None, limit: Optional[app_commands.Range[int, 10]] = None):
         '''
@@ -966,7 +949,6 @@ class General(commands.Cog):
         user='owner', smax='max_stat', smin='min_stat', wtype='type', imin='min_id', imax='max_id', vmin='min_value', vmax='max_value', ex='exclude', trade='for_trade'
     )
     @app_commands.command(name='trademerch')
-    @checks.api_guilds()
     @checks.perms(gold=True)
     async def _app_trademerch(
         self, interaction: discord.Interaction, user: Optional[discord.User] = None,
@@ -1024,7 +1006,6 @@ class General(commands.Cog):
         add='Item IDs to add to protected list', remove='Item IDs to remove from protected list'
     )
     @app_commands.command(name='protected')
-    @checks.api_guilds()
     @checks.perms()
     async def _app_protected(
         self, interaction: discord.Interaction, add: Optional[str] = None, remove: Optional[str] = None
@@ -1120,7 +1101,6 @@ class General(commands.Cog):
             app_commands.Choice(value='my', name='Mystery crates'),
         ])
     @app_commands.command(name='leaderboard')
-    @checks.api_guilds()
     @checks.perms()
     async def _app_leaderboard(self, interaction: discord.Interaction, sort: str, limit: app_commands.Range[int, 5, 100] = 100):
         '''
@@ -1201,7 +1181,6 @@ class General(commands.Cog):
 
     @app_commands.describe(inactive='Only fetch inactive members (default to True)')
     @app_commands.command(name='activity')
-    @checks.api_guilds()
     @checks.perms()
     async def _app_activity(self, interaction: discord.Interaction, inactive: bool = True):
         '''
@@ -1217,7 +1196,6 @@ class General(commands.Cog):
         maxprice='max_price', minprice='min_price', minid='ignore_id'
     )
     @app_commands.command(name='cheap')   
-    @checks.api_guilds()
     @checks.perms(gold=True)
     async def _app_cheap(
         self, interaction: discord.Interaction,
@@ -1281,7 +1259,6 @@ class General(commands.Cog):
         order=[app_commands.Choice(value=k, name=v) for k, v in idle.sort_strength.items()]
     )
     @app_commands.command(name='strength')
-    @checks.api_guilds()
     @checks.perms()
     async def _app_strength(self, interaction: discord.Interaction, order: str = 'str'):
         '''
@@ -1581,11 +1558,11 @@ async def _get_raidstats(bot, ctx: Union[commands.Context, discord.Interaction],
         res.append((round(i/10,1), cost))
     return await Paginator(
         entries=res,
-        parser=lambda x: str(round(x[0]-0.1,1)).rjust(4) + ' \u2192 ' + str(round(x[0],1)).rjust(4) + ' : ' + ('$' + intcomma(x[1])).rjust(15),
+        parser=lambda x: str(round(x[0]-0.1,1)).rjust(4) + ' \u2192 ' + str(round(x[0],1)).rjust(4) + ' : ' + ('${:,d}'.format(x[1])).rjust(15),
         title='Raidstats price',
         codeblock=True,
         length=10,
-        footer=f'Total cost: ${intcomma(total)}',
+        footer=f'Total cost: ${total:,d}',
         color=random.getrandbits(24)
     ).paginate(ctx)
 
@@ -1601,7 +1578,7 @@ async def _get_xp(bot, ctx: Union[commands.Context, discord.Interaction], target
         level_table = []
         for i in range(0, len(idle.levels)):
             level_table += [
-                'Level {}'.format((i+1)).ljust(12) + ('Beginner' if i == 0 else intcomma(idle.levels[i])).rjust(12)
+                'Level {}'.format((i+1)).ljust(12) + ('Beginner' if i == 0 else '{:,d}'.format(idle.levels[i])).rjust(12)
             ]
         return await Paginator(
             title='Level table',
@@ -1634,22 +1611,22 @@ async def _get_xp(bot, ctx: Union[commands.Context, discord.Interaction], target
     if lvl < 25:
         embed.add_field(
             name='To {}'.format('next evolution' if lvl > 11 else 'second class'),
-            value='{} XP\n{} lv1 adv (375 XP/adv)\n{} days (48 a1s/day)'.format(
-                intcomma(a := utils.getnextevol(value)), intcomma(b:= a / 375, 2), intcomma(b / 48, 2) # type: ignore
+            value='{:,d} XP\n{:,.2f} lv1 adv (375 XP/adv)\n{:,.2f} days (48 a1s/day)'.format(
+                a := utils.getnextevol(value), b:= a / 375, b / 48 # type: ignore
             )
         )
     if lvl < 29:
         embed.insert_field_at(0,
             name='To next level',
-            value='{} XP\n{} lv1 adv (375 XP/adv)\n{} days (48 a1s/day)'.format(
-                intcomma(a := utils.getnextlevel(value)), intcomma(b:= a / 375, 2), intcomma(b / 48, 2) # type: ignore
+            value='{:,d} XP\n{:,.2f} lv1 adv (375 XP/adv)\n{:,.2f} days (48 a1s/day)'.format(
+                a := utils.getnextlevel(value), b:= a / 375, b / 48 # type: ignore
             )
         )
     if lvl < 30:
         embed.add_field(
             name='To level 30',
-            value='{} XP\n{} lv1 adv (375 XP/adv)\n{} days (48 a1s/day)'.format(
-                intcomma(a := utils.getto30(value)), intcomma(b:= a / 375, 2), intcomma(b / 48, 2)
+            value='{:,d} XP\n{:,.2f} lv1 adv (375 XP/adv)\n{:,.2f} days (48 a1s/day)'.format(
+                a := utils.getto30(value), b:= a / 375, b / 48
             )
         )
     else:
@@ -1701,10 +1678,10 @@ async def _get_missions(bot, ctx: Union[commands.Context, discord.Interaction], 
                     text=user.name, icon_url=author.display_avatar.url
                 ).add_field(
                     name='Duration', value='\n'.join([
-                        'Regular player: *{}* (*{}* with time booster)'.format(precisedelta(time, suppress=['days']), precisedelta(time * 0.5, suppress=['days'])),
-                        'Silver donator: *{}* (*{}* with time booster)'.format(precisedelta(time * 0.95, suppress=['days']), precisedelta(time * 0.5 * 0.95, suppress=['days'])),
-                        'Gold donator: *{}* (*{}* with time booster)'.format(precisedelta(time * 0.9, suppress=['days']), precisedelta(time * 0.5 * 0.9, suppress=['days'])),
-                        'Emerald donator: *{}* (*{}* with time booster)'.format(precisedelta(time * 0.75, suppress=['days']), precisedelta(time * 0.5 * 0.75, suppress=['days'])),
+                        'Regular player: *{}* (*{}* with time booster)'.format(utils.get_timedelta(time, False), utils.get_timedelta(time * 0.5, False)),
+                        'Silver donator: *{}* (*{}* with time booster)'.format(utils.get_timedelta(time * 0.95, False), utils.get_timedelta(time * 0.5 * 0.95, False)),
+                        'Gold donator: *{}* (*{}* with time booster)'.format(utils.get_timedelta(time * 0.9, False), utils.get_timedelta(time * 0.5 * 0.9, False)),
+                        'Emerald donator: *{}* (*{}* with time booster)'.format(utils.get_timedelta(time * 0.75, False), utils.get_timedelta(time * 0.5 * 0.75, False)),
                     ]),
                 )
                 return await send_message.send(embed=embed)
@@ -1718,10 +1695,10 @@ async def _get_missions(bot, ctx: Union[commands.Context, discord.Interaction], 
                     text=user.name, icon_url=author.display_avatar.url
                 ).add_field(
                     name='Duration', value='\n'.join([
-                        'Regular player: *{}* (*{}* with time booster)'.format(precisedelta(time, suppress=['days']), precisedelta(time * 0.5, suppress=['days'])),
-                        'Silver donator: *{}* (*{}* with time booster)'.format(precisedelta(time * 0.95, suppress=['days']), precisedelta(time * 0.5 * 0.95, suppress=['days'])),
-                        'Gold donator: *{}* (*{}* with time booster)'.format(precisedelta(time * 0.9, suppress=['days']), precisedelta(time * 0.5 * 0.9, suppress=['days'])),
-                        'Emerald donator: *{}* (*{}* with time booster)'.format(precisedelta(time * 0.75, suppress=['days']), precisedelta(time * 0.5 * 0.75, suppress=['days'])),
+                        'Regular player: *{}* (*{}* with time booster)'.format(utils.get_timedelta(time, False), utils.get_timedelta(time * 0.5, False)),
+                        'Silver donator: *{}* (*{}* with time booster)'.format(utils.get_timedelta(time * 0.95, False), utils.get_timedelta(time * 0.5 * 0.95, False)),
+                        'Gold donator: *{}* (*{}* with time booster)'.format(utils.get_timedelta(time * 0.9, False), utils.get_timedelta(time * 0.5 * 0.9, False)),
+                        'Emerald donator: *{}* (*{}* with time booster)'.format(utils.get_timedelta(time * 0.75, False), utils.get_timedelta(time * 0.5 * 0.75, False)),
                     ]),
                 )
                 return await send_message.send(embed=embed)
@@ -1732,7 +1709,7 @@ async def _get_missions(bot, ctx: Union[commands.Context, discord.Interaction], 
                 if c is not None: all_adventures += [
                     '\n'.join([
                         '**Adventure {}** - {}'.format(i+1, idle.adventures[i]),
-                        'Duration: *{}*'.format(precisedelta(datetime.timedelta(hours=(i+1) * (1 - building / 100)), suppress=['days'])),
+                        'Duration: *{}*'.format(utils.get_timedelta(datetime.timedelta(hours=(i+1) * (1 - building / 100)), False)),
                         'Success range: *{}% - {}%*'.format(min(c[0]), max(c[0])),
                         'Success chance: {}%'.format(c[1]),
                         ''
@@ -1768,7 +1745,7 @@ async def _get_missions(bot, ctx: Union[commands.Context, discord.Interaction], 
         for i in range(len(idle.adventures)):
             all_adventures += ['\n'.join([
                 '**Adventure {}** - {}'.format(i+1, idle.adventures[i]),
-                'Duration: *{}*'.format(precisedelta(datetime.timedelta(hours=(i+1) * (1 - building / 100)), suppress=['days'])),
+                'Duration: *{}*'.format(utils.get_timedelta(3600 * (i+1) * (1 - building / 100), False)),
                 '',
             ])]
         async def customnav(ctx):
@@ -1839,13 +1816,13 @@ async def _get_activity(bot, ctx: Union[commands.Context, discord.Interaction], 
             embed = discord.Embed(
                 title='{} active members ({})'.format(bot.idle_guilds[str(gid)][0], len(active_members)),
                 description='\n'.join([
-                    '<@{user}>{member} gained {xp}XP after {adv} adventure(s) since <t:{time}:R> {avg}'.format(
+                    '<@{user}>{member} gained {xp:,d}XP after {adv} adventure(s) since <t:{time}:R> {avg}'.format(
                         user=line[0],
                         member='' if (m:=ctx.guild.get_member(int(line[0]))) is None else ' ({}#{})'.format(m.name, m.discriminator),  # type: ignore
-                        xp=intcomma(line[1]),
+                        xp=line[1],
                         adv=line[2],
                         time=int(line[3].timestamp()),
-                        avg = '' if line[2] == 0 else '\n> ({}XP/adventure)'.format(intcomma(round(line[1]/line[2])))
+                        avg = '' if line[2] == 0 else '\n> ({:,.2f}XP/adventure)'.format(line[1]/line[2])
                     ) for line in i
                 ]),
                 timestamp=timestamp,

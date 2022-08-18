@@ -183,23 +183,36 @@ def get_role_ids(key: str, cfg: dict):
             role_list = config['donation']['tiers'] if 'donation' in config else []
 
     return sorted(
-        [[i[1], cfg['role'][i[1]], i[0]] for i in role_list],
+        [[i[1], cfg['roles'][i[1]], i[0]] for i in role_list],
         key=lambda x: x[2],
         reverse=True
     )
 
-def get_timedelta(seconds):
+def get_timedelta(seconds, with_days=True):
     seconds = round(seconds)
-    delta = [
-        '{} {}'.format(i[0], i[1].format(s='s' if i[0] > 1 else ''))
-        for i in list(zip(
-            [
-                seconds // 86400,
-                seconds // 3600 % 24,
-                seconds // 60 % 60,
-                seconds % 60,
-            ],
-            ['day{s}', 'hour{s}', 'minute{s}', 'second{s}']
-        )) if i[0] > 0
-    ]
+    if with_days:
+        delta = [
+            '{} {}'.format(i[0], i[1].format(s='s' if i[0] > 1 else ''))
+            for i in list(zip(
+                [
+                    seconds // 86400,
+                    seconds // 3600 % 24,
+                    seconds // 60 % 60,
+                    seconds % 60,
+                ],
+                ['day{s}', 'hour{s}', 'minute{s}', 'second{s}']
+            )) if i[0] > 0
+        ]
+    else:
+        delta = [
+            '{} {}'.format(i[0], i[1].format(s='s' if i[0] > 1 else ''))
+            for i in list(zip(
+                [
+                    seconds // 3600,
+                    seconds // 60 % 60,
+                    seconds % 60,
+                ],
+                ['hour{s}', 'minute{s}', 'second{s}']
+            )) if i[0] > 0
+        ]
     return ('{} and {}'.format(', '.join(delta[:-1]), delta[-1]) if len(delta) > 1 else delta[0] if len(delta) > 0 else '')

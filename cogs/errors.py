@@ -1,10 +1,10 @@
 import discord, traceback
 from discord.ext import commands
 from discord import app_commands
-from humanize import precisedelta
 
 from bot.bot import Kiddo
 from utils import errors
+from utils.utils import get_timedelta
 
 class ErrorHandler(commands.Cog, name='Error Handler'):
     def __init__(self, bot: Kiddo):
@@ -35,7 +35,7 @@ class ErrorHandler(commands.Cog, name='Error Handler'):
                 await self.bot.redis.set('idle-api', status, ex=900)
             await self.send_error_message(
                 interaction,
-                f'The API is currently unavailable (Error Code: {status}). Please try again in {precisedelta(cd)}.'
+                f'The API is currently unavailable (Error Code: {status}). Please try again in {get_timedelta(cd)}.'
             )
 
         elif isinstance(error, errors.KiddoException):
@@ -46,6 +46,12 @@ class ErrorHandler(commands.Cog, name='Error Handler'):
 
         elif isinstance(error, (app_commands.CommandInvokeError, commands.CommandInvokeError, commands.BadArgument, ValueError)):
             await self.send_error_message(interaction, str(error))
+
+        elif isinstance(error, commands.BadUnionArgument):
+            message = 'The provided {.name} is not a valid {}'.format(
+                error.param, ' or '.join(map(lambda x: x.__name__, error.converters))
+            )
+            await self.send_error_message(interaction, message)
 
         else:
             try:
@@ -58,7 +64,7 @@ class ErrorHandler(commands.Cog, name='Error Handler'):
                         "\n".join([x for x in traceback.format_tb(error.__traceback__)]),
                     )
                 )
-            return await self.send_error_message(interaction, f'!{type(error).__name__}: {error}')
+            return await self.send_error_message(interaction, f'{type(error).__name__}! {error}')
 
     async def send_error_message(self, ctx, error):
         

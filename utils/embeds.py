@@ -396,4 +396,122 @@ def report(report: dict):
         for i in fields:
             if i is not None:
                 embed.add_field(name=i[0], value=i[1], inline=i[2])
+    elif 'arena' in report['mode'].lower():
+        hps = [[l[-1][l[0].index(report['challenger'][0])], l[-1][l[0].index(report['defender'][0])]] for l in report['logs']]
+        embed = discord.Embed(
+            title='Arena challenge: {}'.format(report['title'][0]),
+            color=report['title'][2],
+            timestamp=datetime.datetime.fromtimestamp(report['timestamps'][1], tz=datetime.timezone.utc),
+            description='\n'.join([
+                'Title: <@&{}>'.format(report['title'][1]),
+                'Challenger: <@{}>'.format(report['challenger'][0]),
+                'Defender: <@{}>'.format(report['defender'][0]),
+                'Battle duration: *{}*'.format(utils.get_timedelta(report['timestamps'][1]-report['timestamps'][0]))
+            ])
+        ).add_field(
+            name='Results', inline=False,
+            value='\n'.join([i for i in [
+                '```',
+                '{:^10} {} - {} {:^10}'.format('Challenger', len([i for i in hps if i[1] == 0]), len([i for i in hps if i[0] == 0]), 'Defender'),
+                # '\n'.join(['{:^12} - {:^12}'.format('{:.1f} HP'.format(i[0]), '{:.1f} HP'.format(i[1])) for i in hps]),
+                '\n'.join(map(lambda i: '  {:<10} - {:>10}'.format('{:.1f} HP'.format(i[0]), '{:.1f} HP'.format(i[1])), hps)),
+                '```',
+                (
+                    None if 'results' not in report
+                    else '<@{}> triggered a 6 hour protection period'.format(report['challenger'][0]) if report['results'] == 'protected'
+                    else '<@{}> lost the title'.format(report['defender'][0]) if report['results'] == 'lost'
+                    else '<@{}> took the title from <@{}>'.format(report['challenger'][0], report['defender'][0]) if report['results'] == 'stole'
+                    else '<@{}> lost the title'.format(report['defender'][0]) if report['results'] == 'lost'
+                    else '\n'.join([
+                        '<@{}> now has **{}**'.format(report['defender'][0], report['results'][0]),
+                        '<@{}> now has **{}**'.format(report['challenger'][0], report['title'][0]),
+                    ])
+                )
+            ] if i is not None])
+        ).add_field(
+            name='Go to battles', inline=False,
+            value=' | '.join(map(
+                lambda x: '[Battle #{}]({})'.format(x+1, report['urls'][x]),
+                range(len(report['urls']))
+            ))
+        )
+    elif 'game' in report['mode'].lower():
+        items = {
+            'item-m': 'Masks',
+            'item-r': 'Rifles',
+            'item-e': 'Explosives',
+            'item-c': 'Canned food',
+            'item-k': 'Knives',
+            'item-f': 'First-aid kits',
+            'item-w': 'Winter clothes'
+        }
+        deaths = {
+            's-kill': 'choosing to unalive oneselves',
+            'f-kill': 'fisting',
+            'k-kill': 'stabbing',
+            'r-kill': 'gun violence',
+            'a-kill': 'wandering around places one should not be',
+            'e-kill': 'stepping on stuff',
+            'w-kill': 'petting the wrong dog',
+            'h-kill': 'negligence',
+            'n-kill': 'the hand of their sexual partners'
+        }
+        embed = discord.Embed(
+            title='Armageddon game',
+            description='\n'.join([
+                'Started by: <@{}>'.format(report['author']),
+                'Duration: *{}*'.format(utils.get_timedelta(report['timestamps'][1]-report['timestamps'][0])),
+                '{} on day {}'.format('Everybody died' if not report['winner'] else '<@{}> won'.format(report['winner']), report['day'])
+            ]),
+            timestamp=datetime.datetime.fromtimestamp(report['timestamps'][1], tz=datetime.timezone.utc),
+            color=0xedf069
+        ).add_field(
+            name='{} players joined'.format(len(report['participants'])),
+            value=' '.join(map(lambda x: f'<@{x}>', report['participants'])),
+            inline=False
+        )
+        allitems = sum([report['stats'][i] for i in items])
+        if allitems > 0:
+            embed.add_field(
+                name='Total items found: {}'.format(sum([report['stats'][i] for i in items])),
+                value='\n'.join([i for i in [
+                    '{}: {}'.format(items[k], report['stats'][k])  if report['stats'][k] > 0 else None for k in items
+                ] if i is not None])
+            )
+        embed.add_field(
+            name='Death board', value='\n'.join([
+                'Times attack options were chosen: {}'.format(report['stats']['attacks']),
+                '\n'.join([i for i in ['{death} death{s} by {method}'.format(
+                    death=report['stats'][k], s='s' if report['stats'][k] > 1 else '', method=deaths[k]
+                ) if report['stats'][k] > 0 else None for k in deaths] if i is not None])
+            ])
+        )
+    elif 'event' in report['mode'].lower():
+        winners = sum([i[1] for i in report['winners']])
+        embed = discord.Embed(
+            title='Armageddon event',
+            description='\n'.join([
+                'Started by: <@{}>'.format(report['author']),
+                'Duration: *{}*'.format(utils.get_timedelta(report['timestamps'][1]-report['timestamps'][0])),
+                '{}/{} game{} played, {}{} winner{} found ({} unique winner{})'.format(
+                    len(report['reports']),
+                    report['games'][0],
+                    's' if report['games'][0] > 1 else '',
+                    winners,
+                    '/{}'.format(report['games'][1]) if report['games'][1] else '',
+                    's' if (report['games'][1] and report['games'][1] > 1) or (not report['games'][1] and winners > 1) else '',
+                    len(report['winners']),
+                    's' if len(report['winners']) > 1 else ''
+                )
+            ]),
+            timestamp=datetime.datetime.fromtimestamp(report['timestamps'][1], tz=datetime.timezone.utc),
+            color=0xedf069
+        ).add_field(
+            name='{} members participated'.format(len(report['participants'])),
+            value=' '.join(map(lambda x: f'<@{x}>', report['participants'])),
+            inline=False
+        ).add_field(
+            name='Winners',
+            value='\n'.join(map(lambda x: '<@{}> - {} game{}'.format(x[0], x[1], 's' if x[1] > 1 else ''), report['winners']))
+        )
     return embed

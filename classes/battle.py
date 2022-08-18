@@ -1,4 +1,5 @@
 import discord, random, asyncio
+from datetime import timedelta
 
 from assets import raid
 from discord.abc import Snowflake
@@ -7,115 +8,37 @@ from utils import utils
 class Fighter:
     def __init__(
         self, user, *, 
-        name: str = None, thumbnail: str = None, data: dict = None,  # type: ignore
+        name: str = None, thumbnail: str = None, classes = [], # type: ignore
         hp: float = 250, dmg: int = None, amr: int = None, atkm: float = None, defm: float = None,  # type: ignore
-        bounty: int = 0,
-        building: int = 0
+        boosted = True, bounty: int = 0
     ):
-        self.user: discord.User = user
+        self.user = user
         self.name: str = name if name is not None else user.display_name if isinstance(user, Snowflake) else ''  # type: ignore
-        self.thumbnail: str = thumbnail or (user.avatar_url if user else None)  # type: ignore
+        self.thumbnail: str = thumbnail or (user.display_avatar.url if user else None)  # type: ignore
         self.color: int = random.getrandbits(24)
         self.boosted: bool = False
-        self.equipped: bool = False
-        self.cached: bool = data is None
         self.bounty: int = bounty
-
-        if data is not None:
-            self.classes = utils.transmute_class(data['class'])
-            bonus = utils.get_class_bonus('rdr', data)
-            pbonus = utils.get_class_bonus('prg', data)
-            (dmg, amr) = utils.get_race_bonus(data['race'])
-            dmg += (pbonus + utils.get_class_bonus('mge', data))
-            amr += (pbonus + utils.get_class_bonus('wrr', data))
-            self.dmg, self.amr = dmg, amr
-            self.atkm, self.defm = round(data['atkmultiply'] + (bonus + building) / 10, 1), round(data['defmultiply'] + (bonus + building) / 10, 1)
-            self.hp = 250 + 10 * utils.get_class_bonus('rng', data)
-            self.level = utils.getlevel(data['xp'])
-            self.guild = data['guild']
-            self.luck = data['luck']
-            self.basedmg, self.baseamr, self.ffdmg, self.ffamr = None, None, None, None
-        else:
-            self.classes = None
-            self.dmg, self.amr = dmg, amr
-            self.atkm, self.defm = atkm, defm
-            self.hp = hp
-            self.level = 0
-            self.guild = 0
-            self.luck = 1
-            self.basedmg, self.baseamr, self.ffdmg, self.ffamr = None, None, None, None
-
+        self.dmg, self.amr = dmg, amr
+        self.atkm, self.defm = atkm, defm
+        self.hp = hp
+        self.boosted = boosted
+        self.classes = classes
+            
     def increase(self, *, dmg = 0, amr = 0):
-        if not self.equipped:
-            self.equipped = True
-            self.ffdmg, self.ffamr = self.dmg, self.amr
         self.dmg += dmg
         self.amr += amr
 
-    def boost(self):
-        if not self.boosted:
-            self.boosted = True
-            self.basedmg = self.dmg
-            self.baseamr = self.amr
-            self.dmg = round(self.dmg * self.atkm, 1)
-            self.amr = round(self.amr * self.defm, 1)
-    
+    def damage(self): return self.dmg * (self.atkm if self.boosted else 1)
+    def armor(self): return self.amr * (self.defm if self.boosted else 1)
+
     def hit(self, damage: float, ignore_armor: bool = False):
         if ignore_armor:
             taken = damage
         else:
-            taken = round(damage - self.amr, 1) if damage > self.amr else 0
-        self.hp -= taken
-        if self.hp < 0: self.hp = 0
+            taken = damage - self.armor()
+        taken = round(taken, 1) if taken > 0 else 0
+        self.hp = 0 if self.hp < taken else self.hp - taken
         return (taken, self.hp)
-
-    async def cache(self, bot):
-        if not await bot.pool.fetchval(
-        'SELECT EXISTS(SELECT 1 FROM profile WHERE uid=$1);',
-        self.user.id,
-        ):
-            await bot.pool.execute(
-                'INSERT INTO profile (uid, wt, atk, def, ratk, rdef, guild, uatk, udef, classes)'
-                ' VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10);',
-                self.user.id,
-                discord.utils.utcnow(),
-                self.dmg, self.amr,
-                self.atkm, self.defm,
-                self.guild,
-                self.ffdmg if self.ffdmg else self.dmg, self.ffamr if self.ffamr else self.amr,
-                self.classes
-            )
-        else:
-            await bot.pool.execute(
-                'UPDATE profile SET wt=$2, atk=$3, def=$4, ratk=$5, rdef=$6, guild=$7, uatk=$8, udef=$9, classes=$10'
-                ' WHERE uid=$1;',
-                self.user.id,
-                discord.utils.utcnow(),
-                self.dmg, self.amr,
-                self.atkm, self.defm,
-                self.guild,
-                self.ffdmg if self.ffdmg else self.dmg, self.ffamr if self.ffamr else self.amr,
-                self.classes
-            )
-
-    @staticmethod
-    async def get_cached_fighter(bot, user):
-        if await bot.pool.fetchval(
-            'SELECT EXISTS(SELECT 1 FROM profile WHERE uid=$1);',
-            user.id
-        ):
-            res = await bot.pool.fetchval(
-                'SELECT (atk, def, ratk, rdef, guild, uatk, udef, xp, classes[1:2]) FROM profile WHERE uid=$1', user.id
-            )
-            f = Fighter(user, dmg=int(res[0]), amr=int(res[1]), atkm=float(res[2]), defm=float(res[3]))
-            f.guild = res[4]
-            f.ffdmg = res[5]
-            f.ffamr = res[6]
-            f.level = utils.getlevel(res[7])
-            f.classes = res[8]
-            return f
-        else:
-            return None
 
 class CityDefenses:
     def __init__(self, name):
@@ -161,7 +84,7 @@ def get_undead(no: int = 100, bounty: int = 0):
                 thumbnail=raid.big_zombie,
                 name='A giant undead'
             )
-        weights.append(int(10 * (undead.dmg * undead.atkm + undead.amr * undead.defm )) + undead.hp)
+        weights.append(int(10 * (undead.damage() + undead.armor())) + undead.hp)
         undeads.append(undead)
     if bounty:
         d = 0
@@ -218,7 +141,9 @@ async def background_fetch(bot, mode, registered, uid, disqualified, guild, guil
                 dmg=stats[0],
                 amr=stats[1],
                 atkm=stats[2],
-                defm=stats[3],)
+                defm=stats[3],
+                classes=fighter.classes
+            )
             # if 'city' in mode.lower(): participant.hp = 250
             registered[uid] = participant
             if not delay_announce:
@@ -259,7 +184,9 @@ async def background_fetch(bot, mode, registered, uid, disqualified, guild, guil
                 dmg=stats[0],
                 amr=stats[1],
                 atkm=stats[2],
-                defm=stats[3],)
+                defm=stats[3],
+                classes=fighter.classes
+            )
             registered[uid] = participant
             if not delay_announce:
                 try:
@@ -299,12 +226,10 @@ async def background_fetch(bot, mode, registered, uid, disqualified, guild, guil
     return None
 
 async def boss_battle(channel, fighters, boss, until, *, feature = None):
-    boss.boost()
     totalatk = 0
     for fighter in fighters:
         fighter.hp = 3500 if feature is None else 4000
-        fighter.boost()
-        totalatk += fighter.dmg
+        totalatk += fighter.damage()
     turn = 0
     while (
         boss.hp > 0
@@ -326,7 +251,7 @@ async def boss_battle(channel, fighters, boss, until, *, feature = None):
         else:
             embed.description=f"{discord.utils.escape_markdown(boss.name)} has {boss_hp:,.1f} HP left."
             embed.add_field(name='Theoretical damage', value=f'{totalatk:,.1f}')
-            embed.add_field(name='Shield absorbed', value=f'{boss.amr:,.1f}')
+            embed.add_field(name='Shield absorbed', value=f'{boss.armor():,.1f}')
             embed.add_field(name='Damage taken', value=f'{boss_dmg:,.1f}')
             await channel.send(embed=embed)
             # Boss attacks
@@ -335,7 +260,7 @@ async def boss_battle(channel, fighters, boss, until, *, feature = None):
             fighter = random.choice(fighters)
             embed = discord.Embed(title=f"{discord.utils.escape_markdown(boss.name)} attacked.", color=fighter.color)
             embed.set_thumbnail(url=fighter.thumbnail)
-            boss_attack = boss.dmg * (1.5 + 1.5 * random.random())
+            boss_attack = boss.damage() * (1.5 + 1.5 * random.random())
             hp_before = fighter.hp
             (dmg, hp) = fighter.hit(boss_attack)
             description = []
@@ -343,13 +268,13 @@ async def boss_battle(channel, fighters, boss, until, *, feature = None):
             if round(hp,1) == 0:
                 content.append(fighter.user.mention)
                 fighters.remove(fighter)
-                totalatk -= fighter.dmg
+                totalatk -= fighter.damage()
                 description.append(f'{discord.utils.escape_markdown(fighter.name)} died.')
                 embed.color = 0
             else:
                 description.append(f'{discord.utils.escape_markdown(fighter.name)} has {hp:,.1f} HP left.')
             embed.add_field(name='Theoretical damage', value=f'{boss_attack:,.1f}')
-            embed.add_field(name='Shield absorbed', value=f'{fighter.amr:,.1f}')
+            embed.add_field(name='Shield absorbed', value=f'{fighter.armor():,.1f}')
             embed.add_field(name='Damage taken', value=f'{dmg:,.1f}')
             if feature is not None:
                 if 'heal' in feature:
@@ -371,7 +296,7 @@ async def boss_battle(channel, fighters, boss, until, *, feature = None):
                             if round(hp,1) == 0:
                                 content.append(t.user.mention)
                                 fighters.remove(t)
-                                totalatk -= t.dmg
+                                totalatk -= t.damage()
                                 description.append(f'{discord.utils.escape_markdown(t.name)} died.')
                                 embed.color = 0
                             else:
@@ -385,7 +310,7 @@ async def boss_battle(channel, fighters, boss, until, *, feature = None):
                         if round(hp,1) == 0:
                             content.append(t.user.mention)
                             fighters.remove(t)
-                            totalatk -= t.dmg
+                            totalatk -= t.damage()
                             description.append(f'{discord.utils.escape_markdown(t.name)} died.')
                             embed.color = 0
             embed.set_footer(text=f'Attack #{turn} - Fighters left: {len(fighters)}')
@@ -412,10 +337,10 @@ async def undead_battle(
         # Check critical attack
         crit = random.randrange(5) == 0
         # Zombie does 30-60% damage
-        dmg = round(undead.dmg * undead.atkm * random.uniform(0.3, 0.6), 1)
+        dmg = round(undead.damage() * random.uniform(0.3, 0.6), 1)
         # Armor reduced to 40-50% efficiency
         odds = len(undeads)/len(fighters)
-        amr = round(fighter.amr * fighter.defm * random.choices([0.5, 0.4], weights=[1 / (turn/100 + 1), odds], k=1)[0], 1)
+        amr = round(fighter.armor() * random.choices([0.5, 0.4], weights=[1 / (turn/100 + 1), odds], k=1)[0], 1)
         # Critical hits ignore armor
         taken = dmg if crit else 0 if (dmg - amr) < 0 else (dmg - amr)
         description = 'It\'s a critical hit! ' if crit else ''
@@ -479,9 +404,9 @@ async def undead_battle(
         # Check critical attack
         crit = random.randrange(5) == 0
         # Fighter damage
-        dmg = fighter.dmg * fighter.atkm
+        dmg = fighter.damage()
         # Armor reduced to 20-30% efficiency
-        amr = round(undead.amr * undead.defm * random.choices([0.2, 0.3], weights=[1/(1 + turn/100), odds], k=1)[0], 1)
+        amr = round(undead.armor() * random.choices([0.2, 0.3], weights=[1/(1 + turn/100), odds], k=1)[0], 1)
         # Critical hits ignore armor
         taken = dmg if crit else 0 if (dmg - amr) < 0 else (dmg - amr)
         description = 'It\'s a critical hit! ' if crit else ''
@@ -511,7 +436,7 @@ async def undead_battle(
                     embed.description += 'The undead is too big to be cut in half.'  # type: ignore
                 else:
                     undead.hp += 1
-                    undead.dmg /= 2
+                    undead.atkm /= 2
                     undead.amr = 0
                     undead.thumbnail = raid.half_a_zombie
                     embed.description += 'The {} is cut in half, but is still moving.'.format('undead' if not undead.user else 'corpse of ' + undead.name)  # type: ignore
@@ -544,16 +469,12 @@ async def undead_battle(
     return (fighters, undeads, turn, turned, total, og, board, undead_board, payout)
 
 async def city_battle(channel, fighters, defenses, until, delay = 5):
-    atk = 0
+    atk = sum([f.damage() for f in fighters])
     dealt = 0
     turn = 0
     destroyed = []
-    for fighter in fighters:
-        fighter.boost()
-        fighter.hp = 250
-        atk += fighter.dmg
-    fighters.sort(key = lambda x: x.amr)
-    fighters.sort(key = lambda x: x.dmg, reverse = True)
+    fighters.sort(key = lambda x: x.armor())
+    fighters.sort(key = lambda x: x.damage(), reverse = True)
     while (
         len(defenses) > 1
         and len(fighters) > 0
@@ -584,7 +505,7 @@ async def city_battle(channel, fighters, defenses, until, delay = 5):
             embed = discord.Embed(title=f"{defenses[0][0]}'s defenses attacked.", color=0xfffffe).set_thumbnail(url=fighter.thumbnail) if delay else None
             (dmg, hp) = fighter.hit(defenses[0][1])
             if round(hp,1) == 0:
-                atk -= fighter.dmg
+                atk -= fighter.damage()
                 if embed:
                     embed.description =f'{fighter.user} died.'
                     embed.color = 0
@@ -593,8 +514,84 @@ async def city_battle(channel, fighters, defenses, until, delay = 5):
                 embed.description=f'{fighter.user} has {hp:,.1f} left.'
             if embed:
                 embed.add_field(name='Damage dealt', value='{:,.1f}'.format(defenses[0][1]))
-                embed.add_field(name='Shield absorbed', value='{:,.1f}'.format(fighter.amr))
+                embed.add_field(name='Shield absorbed', value='{:,.1f}'.format(fighter.armor()))
                 embed.add_field(name='Damage taken', value='{:,.1f}'.format(dmg))
                 embed.set_footer(text=f'Fighters: {len(fighters)} | Defenses: {len(defenses[1:])}')
                 await channel.send(embed=embed)
     return (turn, destroyed, dealt)
+
+async def raid_battle(opponents, channel, ordered: bool = False, ff: bool = False):
+    title = '{} vs {}'.format(
+        discord.utils.escape_markdown(opponents[0][0].name),
+        discord.utils.escape_markdown(opponents[1][0].name)
+    )
+    for p in opponents:
+        p[0].hp = 250
+    battle = [
+        [
+            0,
+            '{} {} vs {} started!'.format(
+                'Fistfight battle' if ff else 'Raid battle',
+                opponents[0][0].user.mention,
+                opponents[1][0].user.mention
+            )
+        ]
+    ]
+    log_message = await channel.send(
+        embed=discord.Embed(
+            title=title,
+            description = battle[0], color = 0xffb463
+        )
+    )
+    await asyncio.sleep(4)
+    attacker, defender = opponents[::-1] if ordered else random.sample(opponents, k=2)
+    battle_log = [(opponents[0][0].user.id, opponents[1][0].user.id, int(attacker == opponents[1]))]
+    start_time = discord.utils.utcnow()
+    while(
+        discord.utils.utcnow() < start_time + timedelta(minutes=5)
+        and opponents[0][0].hp > 0
+        and opponents[1][0].hp > 0
+    ):
+        damage = attacker[0].damage() + random.randint(0, 100) - defender[0].armor()
+        damage = round(damage, 1) if round(damage, 1) > 0 else 0.1
+        defender[0].hp = round(defender[0].hp - damage, 1)
+        if defender[0].hp < 0:
+            defender[0].hp = 0
+        battle_log.append((opponents[0][0].hp, opponents[1][0].hp, damage))  # type: ignore
+        battle.append([
+            len(battle), 
+            '{} attacked! {} took **{:,.1f}** damage.'.format(
+                attacker[0].user.mention,
+                defender[0].user.mention,
+                damage
+            )
+        ])
+        embed = discord.Embed(
+            title=title,
+            description='{p1} - {hp1} HP\n{p2} - {hp2} HP'.format(
+                p1=opponents[0][0].name,
+                hp1=round(opponents[0][0].hp, 1),
+                p2=opponents[1][0].name,
+                hp2=round(opponents[1][0].hp, 1)
+            ),
+            color = 0xffb463
+        )
+        for line in battle[-3:]:
+            embed.add_field(
+                name='Turn #{}'.format(line[0]),
+                value=line[1]
+            )
+        await log_message.edit(embed=embed)
+        await asyncio.sleep(4)
+        attacker, defender = defender, attacker
+    opponents.sort(key=lambda x: x[0].hp, reverse=True)
+    return opponents, battle_log
+
+async def normal_battle(opponents):
+    stats = [
+        int(opponents[0][0].dmg) + int(opponents[0][0].amr) + random.randint(1, 7),
+        int(opponents[1][0].dmg) + int(opponents[1][0].amr) + random.randint(1, 7)
+    ]
+    winner = random.choice(opponents) if stats[0] == stats[1] else opponents[stats.index(max(stats))]
+    loser = opponents[opponents.index(winner) - 1]
+    return winner, loser

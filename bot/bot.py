@@ -1,4 +1,5 @@
-import os, traceback, discord, datetime, json, asyncio, asyncpg
+import os, traceback, discord, json, asyncio, asyncpg
+from datetime import timedelta
 from redis import asyncio as aioredis
 from typing import List, Optional
 from itertools import cycle
@@ -160,11 +161,14 @@ class Kiddo(commands.Bot):
                 return
         return await channel.send(message, embed=embed, file=file)  # type: ignore
 
-    async def custom_log(self, message=None, embed=None, file=None, channel=824146368108560394):
+    async def custom_log(self, message=None, embed=None, file=None, channel=824146368108560394, pingrole: Optional[discord.Role] = None):
         if utils.check_if_all_null(message, embed, file): return
         log = self.get_channel(channel)
         if log is None: return
-        return await log.send(message, embed=embed, file=file, allowed_mentions=discord.AllowedMentions(everyone=False, users=False, roles=True, replied_user=False))  # type: ignore
+        if pingrole is not None:
+            msg = pingrole.mention if message is None else pingrole.mention + ' ' + message
+        else: msg = message
+        return await log.send(msg, embed=embed, file=file, allowed_mentions=discord.AllowedMentions(everyone=False, users=False, roles=pingrole is not None, replied_user=False))  # type: ignore
 
     async def setup_hook(self) -> None:
         # Load extensions
@@ -227,14 +231,18 @@ class Kiddo(commands.Bot):
     async def idle_query(self, query, ctx = None, tries: int = 3):
         res, status = [], 0
         for i in range(tries):
-            start_time = datetime.datetime.now()
+            start_time = discord.utils.utcnow()
             if len(query) > 0 and query.startswith(idle.QUERY_PREFIX): query = query[len(idle.QUERY_PREFIX):]
             async with self.session.get(
                 idle.QUERY_PREFIX + query, headers=self.get_token()
             ) as r:
-                end_time = datetime.datetime.now()
-                delay = round((end_time - start_time)/datetime.timedelta(microseconds=1000))
+                end_time = discord.utils.utcnow()
+                delay = round((end_time - start_time)/timedelta(microseconds=1000))
                 status = r.status
+                if ctx:
+                    author = ctx.user if isinstance(ctx, discord.Interaction) else ctx.author
+                    cd = 15 if isinstance(author, discord.Member) and author.get_role(825349199583379466) else 30
+                    await self.redis.set(f'cd{author.id}', ctx.command.qualified_name if ctx.command else 'unknown reason', ex=cd)
                 try:
                     res = await r.json()
                 except Exception:

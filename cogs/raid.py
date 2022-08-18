@@ -4,9 +4,9 @@ from discord.ext import commands, tasks
 from typing import Optional
 
 from bot.bot import Kiddo
-from assets import raid, config, strings  # type: ignore
+from assets import raid, config, strings
 from classes import battle, ui
-from utils import utils, embeds, checks  # type: ignore
+from utils import utils, embeds, checks
 
 async def announce(bot, msg, god=None):
     role = 'raid' if god is None else god
@@ -26,8 +26,7 @@ async def announce(bot, msg, god=None):
             continue
     return announcements
 
-@checks.mod_only()
-@checks.api_guilds()
+@app_commands.default_permissions(manage_messages=True)
 class Raid(commands.GroupCog, group_name='raid'):
     def __init__(self, bot: Kiddo):
         self.bot = bot
@@ -105,7 +104,14 @@ class Raid(commands.GroupCog, group_name='raid'):
     @tasks.loop(minutes=1)
     async def check_delayed_raids(self):
         if not self.mode and len(self.delayed_raid) > 0:
-            data = self.delayed_raid[sorted(self.delayed_raid.keys())[0]]
+            first_event = sorted(self.delayed_raid.keys())[0]
+            if first_event > self.check_delayed_raids.next_iteration.timestamp(): return
+            now = discord.utils.utcnow().timestamp()
+            if first_event > now: await asyncio.sleep(first_event - now)
+            if self.mode:
+                return await self.bot.custom_log(message='{} is currently in progress. {} raid scheduled for later.'.format(self.mode, self.delayed_raid[first_event][0].title()))
+            await self.bot.redis.hdel('delay:raid', str(first_event))
+            data = self.delayed_raid.pop(first_event)
             data[1] = self.bot.get_user(data[1])
             if data[0] == 'belthazor':
                 data[-1] = self.bot.get_user(data[-1])
@@ -146,7 +152,6 @@ class Raid(commands.GroupCog, group_name='raid'):
 
     @app_commands.describe(hp='The boss HP (or the number of scrael)', god='Whether it\'s a god raid')
     @app_commands.command(name='announce')
-    @checks.mod_only()
     async def _app_announcements(self, interaction: discord.Interaction, hp: app_commands.Range[int, 0] = 0, god: Optional[str] = None):
         '''
         Send a raid announcement
@@ -193,8 +198,6 @@ class Raid(commands.GroupCog, group_name='raid'):
     )
     @app_commands.rename(delay='at')
     @app_commands.command(name='belthazor')
-    @checks.mod_only()
-    @checks.guild_bill()
     @checks.perms(guild=True, mod=True)
     async def _belthazor(self, interaction: discord.Interaction, private: bool = False, possess: Optional[discord.User] = None, delay: Optional[int] = None):
         '''
@@ -211,8 +214,6 @@ class Raid(commands.GroupCog, group_name='raid'):
     )
     @app_commands.rename(delay='at')
     @app_commands.command(name='impostor')
-    @checks.mod_only()
-    @checks.guild_bill()
     @checks.perms(guild=True, mod=True)
     async def _impostor(self, interaction: discord.Interaction, private: bool = False, delay: Optional[int] = None):
         '''
@@ -230,8 +231,6 @@ class Raid(commands.GroupCog, group_name='raid'):
     )
     @app_commands.rename(delay='at')
     @app_commands.command(name='enhanced')
-    @checks.mod_only()
-    @checks.guild_bill()
     @checks.perms(guild=True, mod=True)
     async def _enhanced(self, interaction: discord.Interaction, hp: app_commands.Range[int, 100000] = raid.raid_cfg['hp'], private: bool = False, user: Optional[discord.User] = None, delay: Optional[int] = None):
         '''
@@ -253,8 +252,6 @@ class Raid(commands.GroupCog, group_name='raid'):
     )
     @app_commands.rename(no='size', delay='at')
     @app_commands.command(name='undead')
-    @checks.mod_only()
-    @checks.guild_bill()
     @checks.perms(guild=True, mod=True)
     async def _undead(self, interaction: discord.Interaction, no: app_commands.Range[int, 50] = 0, prize: app_commands.Range[int, 0] = 0, payout: str = 'everyone', private: bool = False, delay: Optional[int] = None):
         '''
@@ -278,8 +275,6 @@ class Raid(commands.GroupCog, group_name='raid'):
         m='moats', t='towers', b='ballistae', delay='at'
     )
     @app_commands.command(name='city')
-    @checks.mod_only()
-    @checks.guild_bill()
     @checks.perms(guild=True, mod=True)
     async def _city(
         self, interaction: discord.Interaction, name: Optional[str] = None, enemy: Optional[str] = None,
@@ -324,15 +319,16 @@ class Raid(commands.GroupCog, group_name='raid'):
             await self.bot.custom_log(message=f'{author.mention} scheduled {message}>')
             await asyncio.sleep(delay-timestamp)
             timestamp = int(discord.utils.utcnow().timestamp())
-        else:
-            await interaction.followup.send('Starting {}'.format(message))
         if self.mode is None:
+            await interaction.followup.send('Starting {}'.format(message))
             await setup(author, *args[1:])
         else:
             while timestamp in self.delayed_raid: timestamp += 1
             self.delayed_raid[timestamp] = data
             await self.bot.redis.hset('delay:raid', str(timestamp), json.dumps(data))
-            await interaction.followup.send('{} is currently in progress. This raid will start after.'.format(self.mode), ephemeral=True)
+            message = '{} is currently in progress. {} raid scheduled for later.'.format(self.mode, data[0].title())
+            await self.bot.custom_log(message=message)
+            await interaction.followup.send(message, ephemeral=True)
 
     async def setup_belthazor(self, author, private, possess):
         self.private = private
@@ -576,7 +572,6 @@ class Raid(commands.GroupCog, group_name='raid'):
         # Send message
         if self.channel is None: return
         message_list = []
-        self.delayed_messages = []
         button = ui.Join(
             waitlist=self.waitlist, banlist=self.disqualified, participants=self.participants, label=self.mode or 'guild raid', msg=message_list
         )
@@ -938,7 +933,7 @@ class Raid(commands.GroupCog, group_name='raid'):
         report.update({
             'fighters': [
                 (f.user.id, f.hp) for f in
-                sorted(sorted(self.participants.values(), key = lambda x: x.amr), key = lambda y: y.dmg, reverse = True)
+                sorted(sorted(self.participants.values(), key = lambda x: x.armor()), key = lambda y: y.damage(), reverse = True)
             ],
             'damage': destroyed,
             'timestamps': (start_time.timestamp(), timestamp.timestamp()),
@@ -977,7 +972,6 @@ class Raid(commands.GroupCog, group_name='raid'):
         self.boss = None
         # Belthazor data
         self.belthazor_prev = {}
-
 
 async def setup(bot):
     await bot.add_cog(Raid(bot))

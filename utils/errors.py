@@ -1,6 +1,7 @@
 import discord
 from discord.ext import commands
-from humanize import precisedelta
+
+from utils.utils import get_timedelta
 
 class KiddoException(commands.CommandInvokeError, discord.app_commands.CommandInvokeError):
     """ Main Kiddo exception class """
@@ -43,7 +44,7 @@ class CommandOnCooldown(KiddoException):
         self.retry_after = cooldown
 
     def __str__(self):
-        return '`{}` will be available in {}.'.format(self.context.command.qualified_name, precisedelta(self.retry_after))
+        return '`{}` will be available in {}.'.format(self.context.command.qualified_name, get_timedelta(self.retry_after))
 
 class NoChoice(KiddoException):
     '''
@@ -137,17 +138,6 @@ class InvalidInput(KiddoException):
 
     def __str__(self):
         return 'Invalid value for `{0.name}`: ```\n{0.input}```'.format(self)
-
-class InvalidArenaTarget(KiddoException):
-    '''
-    Exception raised when picking the wrong arena target.
-    '''
-    def __init__(self, ctx, message):
-        self.context = ctx
-        self.message = message
-
-    def __str__(self):
-        return self.message
 
 class OutOfRange(KiddoException):
     '''

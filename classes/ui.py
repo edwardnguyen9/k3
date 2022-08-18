@@ -26,9 +26,8 @@ class RaidAnnouncement(discord.ui.View):
         self.stop()
 
 class Join(discord.ui.View):
-    def __init__(self, *, waitlist: list = [], participants: dict = {}, banlist: list = [], label: str = 'guild raid', msg = []):
+    def __init__(self, *, waitlist = None, participants = None, banlist: list = [], label: str = 'guild raid', msg = []):
         super().__init__(timeout=None)
-        # self.reg_period = timeout
         self.label = label or 'guild raid'
         self.msg = msg
         self.waitlist = waitlist
@@ -48,22 +47,32 @@ class Join(discord.ui.View):
             await interaction.followup.send('Contrary to popular belief, clicking on a button repeatedly generally does not change anything.', ephemeral=True)
         else:
             self.reacted.append(interaction.user.id)
-            self.waitlist.append(interaction.user.id)
-            while True:
-                await asyncio.sleep(2)
-                if interaction.user.id not in self.waitlist: break
-            if interaction.user.id in self.banlist:
-                await interaction.followup.send('You cannot join this {}.'.format(self.label), ephemeral=True)
-            else:
+            if self.participants is None or self.waitlist is None:
                 await interaction.followup.send('You joined the {}.'.format(self.label), ephemeral=True)
                 if self.content is None: self.content = self.msg[0].content
-                joined_list = [i for i in self.participants if i in self.reacted]
                 await self.msg[0].edit(
                     content='\n'.join([
                         self.content,
-                        ' '.join(map(lambda x: f'<@{x}>', joined_list)) + 'joined the {}.'.format(self.label)
+                        '*{} player{} joined*'.format(l:=len(self.reacted), 's' if l > 1 else '')
                     ])
                 )
+            else:
+                self.waitlist.append(interaction.user.id)
+                while True:
+                    await asyncio.sleep(2)
+                    if interaction.user.id not in self.waitlist: break
+                if interaction.user.id in self.banlist:
+                    await interaction.followup.send('You cannot join this {}.'.format(self.label), ephemeral=True)
+                else:
+                    await interaction.followup.send('You joined the {}.'.format(self.label), ephemeral=True)
+                    if self.content is None: self.content = self.msg[0].content
+                    joined_list = [i for i in self.participants if i in self.reacted]
+                    await self.msg[0].edit(
+                        content='\n'.join([
+                            self.content,
+                            ' '.join(map(lambda x: f'<@{x}>', joined_list)) + 'joined the {}.'.format(self.label)
+                        ])
+                    )
     
 
 class Confirm(discord.ui.View):
