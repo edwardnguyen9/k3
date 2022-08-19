@@ -108,7 +108,7 @@ async def background_fetch(bot, mode, registered, uid, disqualified, guild, guil
     # If user does not have a character
     if not fighter:
         disqualified.append(uid)
-        await bot.log_event('tourney' if 'tourney' in mode else 'raid', message=f'{user} disqualified from the {mode} in {guild.name}')
+        await bot.log_event('tourney' if 'tournament' in mode else 'raid', message=f'{user} disqualified from the {mode} in {guild.name}')
         if not delay_announce:
             try:
                 await user.send('Unable to fetch your character.')
@@ -118,7 +118,7 @@ async def background_fetch(bot, mode, registered, uid, disqualified, guild, guil
         # If user does not belong to guild in private event
         if guildlist and fighter.guild not in guildlist:
             disqualified.append(uid)
-            await bot.log_event('tourney' if 'tourney' in mode else 'raid', message=f'{user} disqualified from the {mode} in {guild.name}')
+            await bot.log_event('tourney' if 'tournament' in mode else 'raid', message=f'{user} disqualified from the {mode} in {guild.name}')
             if not delay_announce:
                 try:
                     await user.send('Guests cannot join this event.', delete_after=300)
@@ -144,7 +144,6 @@ async def background_fetch(bot, mode, registered, uid, disqualified, guild, guil
                 defm=stats[3],
                 classes=fighter.classes
             )
-            # if 'city' in mode.lower(): participant.hp = 250
             registered[uid] = participant
             if not delay_announce:
                 try:
@@ -157,7 +156,7 @@ async def background_fetch(bot, mode, registered, uid, disqualified, guild, guil
                 except discord.Forbidden:
                     pass
             await bot.log_event(
-                'tourney' if 'tourney' in mode else 'raid',
+                'tourney' if 'tournament' in mode else 'raid',
                 message='{} {} the {} in {}'.format(
                     user, 'joined' if not delay_announce else 'cached for',
                     mode, guild.name
@@ -171,12 +170,7 @@ async def background_fetch(bot, mode, registered, uid, disqualified, guild, guil
                         server = guild.name
                     )
                 )
-        else:
-        # elif (
-        #     'tourney' not in config.config[guild.id]['misc']
-        #     or (t:=discord.utils.find(lambda x: x[1] == tier, config.config[guild.id]['misc']['tourney']['tiers']))[0] is None
-        #     or fighter.level <= t[0]
-        # ):
+        elif tier[0] and fighter.level <= tier[0]:
             stats = fighter.fighter_data('fistfight' not in mode)
             participant = Fighter(
                 user=user,
@@ -199,7 +193,7 @@ async def background_fetch(bot, mode, registered, uid, disqualified, guild, guil
                 except discord.Forbidden:
                     pass
             await bot.log_event(
-                'tourney' if 'tourney' in mode else 'raid',
+                'tourney' if 'tournament' in mode else 'raid',
                 message='{} {} the {} in {}'.format(
                     user, 'joined' if not delay_announce else 'cached for',
                     mode, guild.name
@@ -213,16 +207,13 @@ async def background_fetch(bot, mode, registered, uid, disqualified, guild, guil
                         server = guild.name
                     )
                 )
-        # else:
-        #     count -= 1
-        #     waitlist.remove(u_id)
-        #     disqualified.append(u_id)
-        #     await message.remove_reaction('\u2694', fetched_user)
-        #     try:
-        #         await fetched_user.send('You do not meet the level requirement.', delete_after=300)
-        #     except discord.Forbidden:
-        #         pass
-        #     await log_event(bot, 'tourney' if 'tourney' in mode else 'raid', message=f'{fetched_user} disqualified from the {mode} in {guild.name}')
+        else:
+            disqualified.append(uid)
+            try:
+                await user.send('You do not meet the level requirement.', delete_after=300)
+            except discord.Forbidden:
+                pass
+            await bot.log_event('tourney' if 'tournament' in mode else 'raid', message=f'{user} disqualified from the {mode} in {guild.name}')
     return None
 
 async def boss_battle(channel, fighters, boss, until, *, feature = None):

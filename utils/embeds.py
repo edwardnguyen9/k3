@@ -514,4 +514,24 @@ def report(report: dict):
             name='Winners',
             value='\n'.join(map(lambda x: '<@{}> - {} game{}'.format(x[0], x[1], 's' if x[1] > 1 else ''), report['winners']))
         )
+    elif 'tournament' in report['mode'].lower():
+        embed = discord.Embed(
+            title=report['mode'],
+            timestamp=datetime.datetime.fromtimestamp(report['timestamps'][1], tz=datetime.timezone.utc),
+            description='\n'.join([
+                'Participants: {}'.format(len(report['participants'])),
+                'Winner: <@{}>'.format(report['winner']),
+                'Tourney duration: *{}*'.format(utils.get_timedelta(report['timestamps'][1]-report['timestamps'][0])),
+            ])
+        )
+        for i in report['logs']:
+            embed.add_field(
+                name='Round {}'.format(i),
+                value='\n'.join(map(
+                    lambda x: '{s1}<@{id1}>{s1} {hp1:,.1f} - {hp2:,.1f} {s2}<@{id2}>{s2}'.format(
+                        id1=x[0][0], id2=x[1][0], hp1=x[0][1], hp2=x[1][1], s1='~~' if x[0][1] == 0 else '', s2='~~' if x[1][1] == 0 else ''
+                    ),
+                    report['logs'][i]
+                ))
+            )
     return embed

@@ -7,7 +7,7 @@ from typing import Optional
 
 from bot.bot import Kiddo
 from assets import idle, postgres, config
-from utils import utils, embeds, errors, checks  # type: ignore
+from utils import utils, embeds, errors, checks
 
 @checks.guild_bill()
 @checks.mod_only()
@@ -19,10 +19,8 @@ class Auto(commands.GroupCog, group_name='update'):
         self.last_scanned = None
         self.market_channel = {}
         # Donation log
-        self.false_donation_channel = {}
         self.donation_log = {}
         self.donation_leaderboard = {}
-        self.guild_leader = {}
         self.recently_donated = None
         # Offline features
         # Guild Bill only feature
@@ -32,28 +30,19 @@ class Auto(commands.GroupCog, group_name='update'):
     async def on_ready(self):
         if self.is_first_ready:
             await self.bot.loading()
+            donation_cfg = config.event_config['donator']
+            for k, v in donation_cfg.items():
+                if k.isdecimal():
+                    self.donation_log[k] = self.bot.get_channel(v['donation:channel'])
+                    self.donation_leaderboard[k] = [
+                        self.bot.get_channel(v['donation:leaderboard']),
+                        self.bot.get_channel(v['donation:leaderboard:monthly']),
+                    ]
             for s in self.bot.guilds:
                 try:
-                    cfg = config.config[s.id]
+                    self.market_channel[s.id] = s.get_channel(config.config[s.id]['channels']['announce:market'])
                 except KeyError:
                     continue
-                channel_list = cfg['channels'] if 'channels' in cfg else None
-                if channel_list:
-                    if 'announce:market' in channel_list:
-                        self.market_channel[s.id] = s.get_channel(channel_list['announce:market'])
-                    if 'log:donation' in channel_list:
-                        self.false_donation_channel[s.id] = s.get_channel(channel_list['log:donation'])
-                    if s.id in config.guild_donation:
-                        for gid in config.guild_donation[s.id]:
-                            # Donation channel
-                            self.donation_log[gid] = s.get_channel(config.guild_donation[s.id][gid]['donation:channel'])
-                            # Donation leaderboard channels
-                            self.donation_leaderboard[gid] = [
-                                s.get_channel(config.guild_donation[s.id][gid]['donation:leaderboard']),
-                                s.get_channel(config.guild_donation[s.id][gid]['donation:leaderboard:monthly'])
-                            ]
-                            # Guild and server associated with guild leader
-                            self.guild_leader[config.guild_donation[s.id][gid]['leader']] = [gid, s.id]
             print(self.__class__.__name__, 'is ready')
             self.is_first_ready = False
 
@@ -61,8 +50,8 @@ class Auto(commands.GroupCog, group_name='update'):
     async def on_message(self, message):
         if self.is_first_ready: return
         elif not message.guild: return
-        elif message.guild.id in self.false_donation_channel:
-            for k, v in self.false_donation_channel.items():
+        elif message.guild.id == 821988363308630068:
+            for k, v in self.donation_log.items():
                 if v:
                     await self.check_donation(message, k, wrong_channel=(message.channel.id != v.id))
         # Guild Bill adventure
@@ -87,8 +76,8 @@ class Auto(commands.GroupCog, group_name='update'):
     async def on_message_edit(self, _, message):
         if self.is_first_ready: return
         elif not message.guild: return
-        elif message.guild.id in self.false_donation_channel:
-            for k, v in self.false_donation_channel.items():
+        elif message.guild.id == 821988363308630068:
+            for k, v in self.donation_log.items():
                 if v:
                     await self.check_donation(message, k, wrong_channel=(message.channel.id != v.id))
 
@@ -486,9 +475,7 @@ class Auto(commands.GroupCog, group_name='update'):
                         inline=False
                     )
         else:
-            log_data = None
-            for i in config.guild_donation:
-                if guild in config.guild_donation[i]: log_data = config.guild_donation[i][guild]
+            log_data = config.event_config['donator'][guild] if 'guild' in config.event_config['donator'] else None
             if not log_data: raise ValueError('Guild {name} has not been registered.'.format(name=self.bot.idle_guilds[guild][0]))
             log_started = (
                 datetime.datetime.fromtimestamp(log_data['timestamp'], datetime.timezone.utc)
@@ -543,7 +530,7 @@ class Auto(commands.GroupCog, group_name='update'):
             return False
 
     async def remove_donator_roles(self, channel: discord.TextChannel):
-        roles = [(channel.guild.get_role(r[1]), r[2]) for r in utils.get_role_ids('donation', config.config[channel.guild.id])]
+        roles = [(channel.guild.get_role(r[1]), r[2]) for r in utils.get_role_ids('donation')]
         for r in roles:
             if r[0]:
                 members = list(r[0].members)
@@ -551,7 +538,7 @@ class Auto(commands.GroupCog, group_name='update'):
 
     async def add_donator_roles(self, guild, month):
         channel = self.donation_log[guild]
-        roles = [(channel.guild.get_role(r[1]), r[2]) for r in utils.get_role_ids('donation', config.config[channel.guild.id])]
+        roles = [(channel.guild.get_role(r[1]), r[2]) for r in utils.get_role_ids('donation')]
         roles = [r for r in roles if r[0] is not None]
         try:
             (res, status) = await self.bot.idle_query(idle.queries['guild'].format(id=guild))
@@ -650,11 +637,7 @@ class Auto(commands.GroupCog, group_name='update'):
                     ).add_field(
                         name='Go to message', value=f'[Click here]({message.jump_url})'
                     )
-                    try:
-                        alert = await self.false_donation_channel[message.guild.id].send(embed=embed)
-                        await alert.add_reaction('\u203c')
-                    except discord.Forbidden:
-                        await self.bot.log_event('error', message=f'{self.bot.owner.mention} Unable to send message',embed=embed)  # type: ignore
+                    await self.bot.custom_log(embed=embed, channel=827546848750338143)
         elif (
             message.author.id == 424606447867789312
             and self.recently_donated
@@ -674,11 +657,7 @@ class Auto(commands.GroupCog, group_name='update'):
             ).add_field(
                 name='Go to message', value=f'[Click here]({message.jump_url})'
             )
-            try:
-                alert = await self.false_donation_channel[message.guild.id].send(embed=embed)
-                await alert.add_reaction('\u203c')
-            except discord.Forbidden:
-                await self.bot.log_event('error', message=f'{self.bot.owner.mention} Unable to send message',embed=embed)  # type: ignore
+            await self.bot.custom_log(embed=embed, channel=827546848750338143)
 
     async def on_donate(self, message, user: discord.User, amount: int, guild: str, month: int = -1):    
         """ Process valid donation message """

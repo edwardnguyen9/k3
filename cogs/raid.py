@@ -35,6 +35,7 @@ class Raid(commands.GroupCog, group_name='raid'):
         self.announcements = []
         self.switch = False
         # Guild raid
+        self.guild = None
         self.channel = None
         self.role = None
         self.banned = [367158268671557643]
@@ -43,12 +44,12 @@ class Raid(commands.GroupCog, group_name='raid'):
         self.delayed_raid = {}
         # Raid instances
         self.private = False
+        self.fetching = False
         self.mode = None
         self.disqualified = []
         self.waitlist = []
         self.participants = {}
         self.register_message = None
-        self.register = False
         self.autojoin = []
         self.delayed_messages = []
         self.boss = None
@@ -59,16 +60,15 @@ class Raid(commands.GroupCog, group_name='raid'):
     async def on_ready(self):
         if self.is_first_ready:
             await self.bot.loading()
-            server = self.bot.get_guild(config.guild_bill['server'])
-            if server is not None:
-                role = server.get_role(config.guild_bill['officer_role'])
+            self.guild = self.bot.get_guild(config.guild_bill['server'])
+            if self.guild is not None:
+                role = self.guild.get_role(config.guild_bill['officer_role'])
                 if role is not None: self.default_bosses = [u.id for u in role.members]
-                arena = config.config[server.id]['misc']['arena']
-                title_data = config.config[server.id]['misc']['arena:archive'][arena]['titles']
-                titles = [server.get_role(config.config[server.id]['roles'][i[1]]) for i in title_data]
+                title_data = utils.get_role_ids('arena')
+                titles = [self.guild.get_role(i[1]) for i in title_data]
                 self.arena_titles = [t for t in titles if t is not None]
-                self.channel = server.get_channel(config.config[server.id]['channels']['raid'])
-                self.role = server.get_role(config.config[server.id]['roles']['raid'])
+                self.channel = self.guild.get_channel(config.event_config['channels']['raid'])
+                self.role = self.guild.get_role(config.event_config['roles']['raid'])
             self.reset_announcements.start()
             delayed = await self.bot.redis.hgetall('delay:raid')
             for k, v in delayed.items():
@@ -137,10 +137,9 @@ class Raid(commands.GroupCog, group_name='raid'):
                 uid = self.waitlist[0]
                 self.delayed_messages = [i for i in self.delayed_messages if i[0].id != uid]
                 delayed = False
-            guild = self.register_message.guild
             res = await battle.background_fetch(
                 self.bot, self.mode, self.participants, uid, self.disqualified,
-                guild, [] if not self.private else map(int, config.config[guild.id]['misc']['guilds']),  # type: ignore
+                self.guild, [] if not self.private else [17555],
                 belthazor_prev = self.belthazor_prev if self.belthazor_prev else {"lucky": 0, "possessed": 0, "survivors": []},
                 delay_announce=delayed
             )
@@ -299,7 +298,7 @@ class Raid(commands.GroupCog, group_name='raid'):
         args = ['city', private, name, enemy, defenses]
         await self.check_delay(interaction, args, delay, message, self.setup_undead)
         
-    async def check_delay(self, interaction: discord.Interaction, args, delay, message, setup):
+    async def check_delay(self, interaction: discord.Interaction, args, delay, message, setup_raid):
         await interaction.response.defer(thinking=True)
         author = interaction.user
         data = list(args)
@@ -321,7 +320,7 @@ class Raid(commands.GroupCog, group_name='raid'):
             timestamp = int(discord.utils.utcnow().timestamp())
         if self.mode is None:
             await interaction.followup.send('Starting {}'.format(message))
-            await setup(author, *args[1:])
+            await setup_raid(author, *args[1:])
         else:
             while timestamp in self.delayed_raid: timestamp += 1
             self.delayed_raid[timestamp] = data
@@ -332,9 +331,8 @@ class Raid(commands.GroupCog, group_name='raid'):
 
     async def setup_belthazor(self, author, private, possess):
         self.private = private
-        guild = self.channel.guild  # type: ignore
         self.mode = 'Belthazor raid'
-        res = await self.bot.redis.hget('raid_results', str(guild.id))
+        res = await self.bot.redis.hget('raid_results', str(self.guild.id))  # type: ignore
         self.belthazor_prev = prev_raid = json.loads(res) if res else {"lucky": 0, "possessed": 0, "survivors": []}
         prev_boss = prev_raid['possessed']
         prev_survivors = prev_raid['survivors']
@@ -387,7 +385,7 @@ class Raid(commands.GroupCog, group_name='raid'):
         )
         await self.bot.log_event('raid',
             embed = discord.Embed(
-                title=f'{self.mode} started in {guild.name}',
+                title=f'{self.mode} started in {self.guild.name}',  # type: ignore
                 timestamp=discord.utils.utcnow(),
                 color=0x31cccc
             ).add_field(
@@ -398,16 +396,15 @@ class Raid(commands.GroupCog, group_name='raid'):
                 name='HP', value=f'{self.boss.hp:,d}'
             ).set_author(
                 name=author, icon_url=author.display_avatar.url
-            ).set_thumbnail(url=guild.icon.url)  # type: ignore
+            ).set_thumbnail(url=self.guild.icon.url)  # type: ignore
         )
         raidmsg = raid.prompts['belthazor']['message'].format(
-            guild=guild, boss=self.boss, bosshp=self.boss.hp, regtime=int(raid.raid_cfg['reg'] + discord.utils.utcnow().timestamp())
+            guild=self.guild, boss=self.boss, bosshp=self.boss.hp, regtime=int(raid.raid_cfg['reg'] + discord.utils.utcnow().timestamp())
         )
         await self.sign_up(raidmsg, self.belthazor_battle)
 
     async def setup_impostor(self, author, private):
         self.private = private
-        guild = self.channel.guild  # type: ignore
         self.mode = 'Impostor raid'
         title_holders = [t.members[0].id for t in self.arena_titles if len(t.members) == 1]
         possessed = author.id if random.randrange(0,10) < 3 else random.choice(list(set(self.default_bosses + title_holders)))
@@ -432,7 +429,7 @@ class Raid(commands.GroupCog, group_name='raid'):
             pass
         await self.bot.log_event('raid',
             embed = discord.Embed(
-                title=f'{self.mode} started in {guild.name}',
+                title=f'{self.mode} started in {self.guild.name}',  # type: ignore
                 timestamp=discord.utils.utcnow(),
                 color=0x31cccc
             ).add_field(
@@ -443,16 +440,15 @@ class Raid(commands.GroupCog, group_name='raid'):
                 name='HP', value=f'{(self.boss.hp * 0.3):,.0f}'
             ).set_author(
                 name=author, icon_url=author.display_avatar.url
-            ).set_thumbnail(url=guild.icon.url)  # type: ignore
+            ).set_thumbnail(url=self.guild.icon.url)  # type: ignore
         )
         raidmsg = raid.prompts['impostor']['message'].format(
-            guild=guild, boss=self.boss, bosshp=self.boss.hp*0.3, regtime=int(raid.raid_cfg['reg'] + discord.utils.utcnow().timestamp())
+            guild=self.guild, boss=self.boss, bosshp=self.boss.hp*0.3, regtime=int(raid.raid_cfg['reg'] + discord.utils.utcnow().timestamp())
         )
         await self.sign_up(raidmsg, self.impostor_battle)
 
     async def setup_enhanced(self, author, private, hp, user):
         self.private = private
-        guild = self.channel.guild  # type: ignore
         self.mode = 'Enhanced raid'
         self.disqualified = list(self.banned) + [user.id]
         p = await self.bot.get_equipped(user.id, orgs=False)
@@ -467,13 +463,13 @@ class Raid(commands.GroupCog, group_name='raid'):
             hp=hp
         )
         try:
-            await user.send(raid.prompts['enhanced']['dm'].format(guild=guild))
+            await user.send(raid.prompts['enhanced']['dm'].format(guild=self.guild))
         except discord.Forbidden:
             pass
         await self.bot.log_event(
             'raid',
             embed= discord.Embed(
-                title=f'{self.mode} started in {guild.name}',
+                title=f'{self.mode} started in {self.guild.name}',  # type: ignore
                 timestamp=discord.utils.utcnow(),
                 color=0x31cccc
             ).add_field(
@@ -484,16 +480,15 @@ class Raid(commands.GroupCog, group_name='raid'):
                 name='HP', value=f'{self.boss.hp:,d}'
             ).set_author(
                 name=author, icon_url=author.display_avatar.url
-            ).set_thumbnail(url=guild.icon.url)  # type: ignore
+            ).set_thumbnail(url=self.guild.icon.url)  # type: ignore
         )
         raidmsg = raid.prompts['enhanced']['message'].format(
             boss=self.boss, bosshp=self.boss.hp, regtime=int(raid.raid_cfg['reg'] + discord.utils.utcnow().timestamp()),
-            pissoff=random.choice([m for m in guild.members if not m.bot])
+            pissoff=random.choice([m for m in self.guild.members if not m.bot])  # type: ignore
         )
         await self.sign_up(raidmsg, self.enhanced_battle)
 
     async def setup_undead(self, author, private, no, prize, payout):
-        guild = self.channel.guild  # type: ignore
         self.private = private
         key = 'endless' if no == 0 else 'undead'
         self.mode = 'Undead raid'
@@ -501,7 +496,7 @@ class Raid(commands.GroupCog, group_name='raid'):
         await self.bot.log_event(
             'raid',
             embed= discord.Embed(
-                title=f'{self.mode} started in {guild.name}',
+                title=f'{self.mode} started in {self.guild.name}',  # type: ignore
                 timestamp=datetime.datetime.now(datetime.timezone.utc),
                 color=0x31cccc
             ).add_field(
@@ -509,17 +504,16 @@ class Raid(commands.GroupCog, group_name='raid'):
             ).add_field(
                 name='Army size', value=no if no else 'Infinite'
             ).set_author(
-                name=author, icon_url=author.avatar_url
-            ).set_thumbnail(url=guild.icon.url)  # type: ignore
+                name=author, icon_url=author.display_avatar.url
+            ).set_thumbnail(url=self.guild.icon.url)  # type: ignore
         )
         raidmsg = raid.prompts['undead'][key].format(
-            guild=guild.name, no=no, regtime=int(raid.raid_cfg['reg'] + discord.utils.utcnow().timestamp()),
+            guild=self.guild.name, no=no, regtime=int(raid.raid_cfg['reg'] + discord.utils.utcnow().timestamp()),  # type: ignore
         )
         await self.sign_up(raidmsg, self.undead_battle)
 
     async def setup_city(self, author, private, name, enemy, defenses):
         self.private = private
-        guild = self.channel.guild  # type: ignore
         self.mode = 'City raid'
         self.disqualified = list(self.banned)
         self.boss = []
@@ -535,7 +529,7 @@ class Raid(commands.GroupCog, group_name='raid'):
         await self.bot.log_event( 
             'raid',
             embed= discord.Embed(
-                title=f'{self.mode} started in {guild.name}',
+                title=f'{self.mode} started in {self.guild.name}',  # type: ignore
                 timestamp=discord.utils.utcnow(),
                 color=0x31cccc
             ).add_field(
@@ -557,10 +551,10 @@ class Raid(commands.GroupCog, group_name='raid'):
                     )
             ).set_author(
                 name=author, icon_url=author.display_avatar.url
-            ).set_thumbnail(url=guild.icon.url)  # type: ignore
+            ).set_thumbnail(url=self.guild.icon.url)  # type: ignore
         )
         raidmsg = raid.prompts['city']['message'].format(
-            name=city_name, enemy=attackers, guild=guild, defenses=total_defense,
+            name=city_name, enemy=attackers, guild=self.guild, defenses=total_defense,
             regtime=int(raid.raid_cfg['reg'] + discord.utils.utcnow().timestamp()),
         )
         await self.sign_up(raidmsg, self.city_battle)        
@@ -568,7 +562,7 @@ class Raid(commands.GroupCog, group_name='raid'):
     async def sign_up(self, msg, battle):
         # Create sign up message
         raidmsg = f'{self.role.mention} {msg}' if self.role else msg
-        if self.private: raidmsg += '\n**This is a private event, guests cannot join this raid.**'
+        if self.private: raidmsg += '\n**This event is for guild members only.**'
         # Send message
         if self.channel is None: return
         message_list = []
@@ -580,14 +574,14 @@ class Raid(commands.GroupCog, group_name='raid'):
         # Get autojoin list
         autojoin = []
         #Get arena titles
-        arena_list = utils.get_role_ids('arena', config.config[self.register_message.guild.id])  # type: ignore
-        if 'arena' in config.config[self.register_message.guild.id]['misc']:  # type: ignore
-            for i in map(lambda x: self.register_message.guild.get_role(x[1]), arena_list): # type: ignore
-                autojoin += [m for m in i.members if m.id not in self.disqualified]  # type: ignore
+        arena_list = utils.get_role_ids('arena')
+        # if 'arena' in config.config[self.guild.id]['misc']:  # type: ignore
+        for i in map(lambda x: self.guild.get_role(x[1]), arena_list): # type: ignore
+            autojoin += [m for m in i.members if m.id not in self.disqualified]  # type: ignore
         
-        role_list = utils.get_role_ids('donation', config.config[self.register_message.guild.id])  # type: ignore
+        role_list = utils.get_role_ids('donation')
         # Get gold donators
-        gold = self.register_message.guild.get_role(role_list[0][1]) if len(role_list) > 0 else None  # type: ignore
+        gold = self.guild.get_role(role_list[0][1]) if len(role_list) > 0 else None  # type: ignore
         if gold: autojoin += [m for m in gold.members if m.id not in self.disqualified]
         self.autojoin = list(set(autojoin))
 
@@ -608,7 +602,7 @@ class Raid(commands.GroupCog, group_name='raid'):
             await battle()
         
     async def belthazor_battle(self):
-        guild_id = str(self.channel.guild.id)  # type: ignore
+        guild_id = str(self.guild.id)  # type: ignore
         # Add to leaderboard
         b_id = str(self.boss.user.id)  # type: ignore
         async with self.bot.redis.pipeline(transaction=True) as pipe:
@@ -631,7 +625,7 @@ class Raid(commands.GroupCog, group_name='raid'):
         # Boss original HP
         original_hp = self.boss.hp  # type: ignore
         # Start time and duration
-        end_time = (start_time:=discord.utils.utcnow()) + datetime.timedelta(seconds=config.config[int(guild_id)]['time'])
+        end_time = (start_time:=discord.utils.utcnow()) + datetime.timedelta(seconds=config.event_config['raid']['time'])
         # Fight
         turn = await battle.boss_battle(self.channel, fighters, self.boss, end_time)
         blessed = None
@@ -662,7 +656,7 @@ class Raid(commands.GroupCog, group_name='raid'):
                     raider_board[str(survivor)] = [1, 1]
             # Send DM to lucky raider
             try:
-                await blessed.user.send(raid.prompts['belthazor']['blessed'].format(guild=self.channel.guild))  # type: ignore
+                await blessed.user.send(raid.prompts['belthazor']['blessed'].format(guild=self.guild))  # type: ignore
             except discord.Forbidden:
                 pass
         else:
@@ -671,9 +665,9 @@ class Raid(commands.GroupCog, group_name='raid'):
             else:
                 boss_board[b_id] = [1, 1]
             # If boss is an officer
-            if self.boss.user.id in config.config[int(guild_id)]['boss']:  # type: ignore
+            if self.boss.user.id in config.event_config['raid']['boss']:  # type: ignore
                 try:
-                    await self.boss.user.send(raid.prompts['belthazor']['possess'].format(guild=self.channel.guild))  # type: ignore
+                    await self.boss.user.send(raid.prompts['belthazor']['possess'].format(guild=self.guild))  # type: ignore
                 except discord.Forbidden:
                     pass
         async with self.bot.redis.pipeline(transaction=True) as pipe:
@@ -698,7 +692,7 @@ class Raid(commands.GroupCog, group_name='raid'):
         await self.clear(msg, report)
  
     async def impostor_battle(self):
-        guild_id = str(self.channel.guild.id)  # type: ignore
+        guild_id = str(self.guild.id)  # type: ignore
         # Get impostor boss
         real_boss = random.choice(raid.impostor_bosses)
         real_hp = round(self.boss.hp * real_boss['hp_mod'])  # type: ignore
@@ -724,7 +718,7 @@ class Raid(commands.GroupCog, group_name='raid'):
                 raider_board[f_id] = [1, 0]
         
         # Start time and duration
-        end_time = (start_time:=discord.utils.utcnow()) + datetime.timedelta(seconds=config.config[int(guild_id)]['time'])
+        end_time = (start_time:=discord.utils.utcnow()) + datetime.timedelta(seconds=config.event_config['raid']['time'])
         # Report
         report = {}
         report.update({'mode': self.mode})
@@ -787,12 +781,12 @@ class Raid(commands.GroupCog, group_name='raid'):
         await self.clear(msg, report)
 
     async def enhanced_battle(self):
-        guild_id = str(self.channel.guild.id)  # type: ignore
+        guild_id = str(self.guild.id)  # type: ignore
         fighters = list(self.participants.values())
         # Boss original HP
         original_hp = self.boss.hp  # type: ignore
         # Start time and duration
-        end_time = (start_time:=discord.utils.utcnow()) + datetime.timedelta(seconds=config.config[int(guild_id)]['time'])
+        end_time = (start_time:=discord.utils.utcnow()) + datetime.timedelta(seconds=config.event_config['raid']['time'])
         # Fight
         turn = await battle.boss_battle(self.channel, fighters, self.boss, end_time)
         # Result messages
@@ -818,7 +812,7 @@ class Raid(commands.GroupCog, group_name='raid'):
         await self.clear(msg, report)
 
     async def undead_battle(self):
-        guild_id = str(self.channel.guild.id)  # type: ignore
+        guild_id = str(self.guild.id)  # type: ignore
         no, prize, payto = self.boss  # type: ignore
         size = no if no else 100
         undeads = battle.get_undead(size, prize)
@@ -874,14 +868,14 @@ class Raid(commands.GroupCog, group_name='raid'):
                     survivors=' '.join(map(lambda x: x.user.mention, fighters))
                 )
                 await pipe.hset('r_winners', guild_id, json.dumps(survived))
-            for i in undeadboard: pipe.hincrby('zz{}'.format(self.channel.guild.id), i, undeadboard[i])  # type: ignore
+            for i in undeadboard: pipe.hincrby('zz{}'.format(self.guild.id), i, undeadboard[i])  # type: ignore
             for i in leaderboard:
                 (
                     pipe
-                    .hincrby('z{}'.format(self.channel.guild.id), i[0], i[1])  # type: ignore
-                    .hincrby('z:e:{}'.format(self.channel.guild.id), i[0], i[1])  # type: ignore
+                    .hincrby('z{}'.format(self.guild.id), i[0], i[1])  # type: ignore
+                    .hincrby('z:e:{}'.format(self.guild.id), i[0], i[1])  # type: ignore
                 )
-            pipe.set('z:pay:{}'.format(self.channel.guild.id), json.dumps(money))  # type: ignore
+            pipe.set('z:pay:{}'.format(self.guild.id), json.dumps(money))  # type: ignore
             await pipe.execute()
         report = {
             'mode': self.mode,
@@ -903,7 +897,7 @@ class Raid(commands.GroupCog, group_name='raid'):
                 ),
                 color=0xFFD700,
                 timestamp=timestamp
-            ).set_footer(text=f'{turn} rounds', icon_url=self.channel.guild.icon.url)  # type: ignore
+            ).set_footer(text=f'{turn} rounds', icon_url=self.guild.icon.url)  # type: ignore
             for i in range(0, len(highscore), 10):
                 embed.add_field(
                     name='Highscore', value='\n'.join(highscore[i:i+10])
@@ -913,14 +907,14 @@ class Raid(commands.GroupCog, group_name='raid'):
         await self.clear(msg, report, msgembed=embed)
 
     async def city_battle(self):
-        guild_id = str(self.channel.guild.id)  # type: ignore
+        guild_id = str(self.guild.id)  # type: ignore
         fighters = list(self.participants.values())
         defenses = self.boss if isinstance(self.boss, list) else []
         report = {
             'mode': self.mode,
             'city': list(defenses[0])
         }
-        end_time = (start_time:=discord.utils.utcnow()) + datetime.timedelta(seconds=config.config[int(guild_id)]['time'])
+        end_time = (start_time:=discord.utils.utcnow()) + datetime.timedelta(seconds=config.event_config['raid']['time'])
         turn, destroyed, dealt = await battle.city_battle(self.channel, fighters, defenses, end_time)
         timestamp = discord.utils.utcnow()
         if len(defenses) > 1:
@@ -966,7 +960,6 @@ class Raid(commands.GroupCog, group_name='raid'):
         self.waitlist = []
         self.participants = {}
         self.register_message = None
-        self.register = False
         self.autojoin = []
         self.delayed_messages = []
         self.boss = None

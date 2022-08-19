@@ -3,6 +3,7 @@ from typing import Union
 from decimal import Decimal
 
 from assets import idle
+from assets.config import event_config
 
 def pager(entries, chunk: int, similar_chunk: bool = False):
     if similar_chunk:
@@ -173,17 +174,23 @@ def get_market_entry(item, trimmed = False):
         res['signature'] = item['signature']
     return res
 
-def get_role_ids(key: str, cfg: dict):
+def get_role_ids(key: str):
     role_list = []
-    if 'misc' in cfg:
-        config = cfg['misc']
-        if key == 'arena':
-            role_list = config['arena:archive'][config['arena']]['titles'] if 'arena' in config else []
-        elif key == 'donation':
-            role_list = config['donation']['tiers'] if 'donation' in config else []
+    # if 'misc' in cfg:
+        # config = cfg['misc']
+    if key == 'arena':
+        role_list = [
+            event_config['arenas'][[event_config['arenas']['arena']]]['titles']
+        ]
+        # role_list = config['arena:archive'][config['arena']]['titles'] if 'arena' in config else []
+    elif key == 'donation':
+        role_list = [
+            event_config['donator']['tiers']
+        ]
+        # role_list = config['donation']['tiers'] if 'donation' in config else []
 
     return sorted(
-        [[i[1], cfg['roles'][i[1]], i[0]] for i in role_list],
+        [[i[1], event_config['roles'][i[1]], i[0]] for i in role_list],
         key=lambda x: x[2],
         reverse=True
     )
