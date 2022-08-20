@@ -45,6 +45,7 @@ class Armageddon(commands.GroupCog, group_name='armageddon'):
         if self.is_first_ready:
             await self.bot.loading()
             self.channel: discord.TextChannel = self.bot.get_channel(821995624525201419)  # type: ignore
+            self.check_delayed_armageddon.start()
             print(self.__class__.__name__, 'is ready')
             self.is_first_ready = False
 

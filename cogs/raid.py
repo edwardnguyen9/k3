@@ -26,7 +26,7 @@ async def announce(bot, msg, god=None):
             continue
     return announcements
 
-@app_commands.default_permissions(manage_messages=True)
+@app_commands.default_permissions(manage_channels=True)
 class Raid(commands.GroupCog, group_name='raid'):
     def __init__(self, bot: Kiddo):
         self.bot = bot
@@ -151,6 +151,7 @@ class Raid(commands.GroupCog, group_name='raid'):
 
     @app_commands.describe(hp='The boss HP (or the number of scrael)', god='Whether it\'s a god raid')
     @app_commands.command(name='announce')
+    @checks.perms(mod=True)
     async def _app_announcements(self, interaction: discord.Interaction, hp: app_commands.Range[int, 0] = 0, god: Optional[str] = None):
         '''
         Send a raid announcement
@@ -590,10 +591,10 @@ class Raid(commands.GroupCog, group_name='raid'):
         await asyncio.sleep(raid.raid_cfg['reg'])
         button.stop()
         await self.register_message.edit(view=None)
-        if self.mode is None: return
         while len(self.autojoin) + len(self.waitlist) > 0 or not self.fetching:
             await asyncio.sleep(1)
         self.background_fetch.stop()
+        if self.mode is None: return
         if len(self.participants) == 0:
             await self.channel.send(f'Not enough people joined... Unable to start the {self.mode}.')  # type: ignore
         else:

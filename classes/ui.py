@@ -76,19 +76,27 @@ class Join(discord.ui.View):
     
 
 class Confirm(discord.ui.View):
-    def __init__(self, count = []):
-        super().__init__()
-        self.counter = 0
-        self.count = count
+    def __init__(self, users = [], invalid = 'You cannot interact with this'):
+        super().__init__(timeout=30)
+        self.users = users
+        self.response = None
+        self.invalid = invalid
 
-    # When the confirm button is pressed, set the inner value to `True` and
-    # stop the View from listening to more input.
-    # We also send the user an ephemeral message that we're confirming their choice.
-    @discord.ui.button(label='Count', style=discord.ButtonStyle.green)
-    async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
-        self.counter += 1
-        if self.count: await self.count[0].edit(content=str(self.counter))
-        if self.counter == 10: self.stop()
+    @discord.ui.button(label='Yes', style=discord.ButtonStyle.green)
+    async def _yes(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user.id in self.users:
+            self.response = True
+            self.stop()
+        else:
+            await interaction.response.send_message(self.invalid, ephemeral=True)
+
+    @discord.ui.button(label='No', style=discord.ButtonStyle.red)
+    async def _no(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user.id in self.users:
+            self.response = False
+            self.stop()
+        else:
+            await interaction.response.send_message(self.invalid, ephemeral=True)
 
     # This one is similar to the confirmation button except sets the inner value to `False`
     # @discord.ui.button(label='No', style=discord.ButtonStyle.red)

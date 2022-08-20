@@ -62,7 +62,6 @@ class Admin(commands.Cog):
             else:
                 await message.channel.send('User no longer seen by bot')
 
-
     @commands.Cog.listener()
     async def on_message_edit(self, pre, message):
         if pre.author.bot: return

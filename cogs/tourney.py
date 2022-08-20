@@ -8,8 +8,9 @@ from pprint import pformat
 from bot.bot import Kiddo
 from assets import config
 from classes import ui, battle
-from utils import utils, embeds
+from utils import utils, embeds, checks
 
+@app_commands.default_permissions(manage_channels=True)
 class Tournament(commands.GroupCog, group_name='tourney'):
     def __init__(self, bot: Kiddo):
         self.bot = bot
@@ -30,7 +31,6 @@ class Tournament(commands.GroupCog, group_name='tourney'):
         self.autojoin = []
         self.delayed_messages = []     
         self.fetching = False
-        self.report = {}
 
     @commands.Cog.listener()
     async def on_ready(self):
@@ -40,6 +40,7 @@ class Tournament(commands.GroupCog, group_name='tourney'):
             self.channel = self.bot.get_channel(config.event_config['channels']['tourney'])
             self.role = self.guild.get_role(config.event_config['roles']['tourney']) if self.guild else None
             self.banned = config.event_config['tourney']['bans']
+            self.check_delayed_tourney.start()
             print(self.__class__.__name__, 'is ready')
             self.is_first_ready = False
 
@@ -57,6 +58,7 @@ class Tournament(commands.GroupCog, group_name='tourney'):
             data[0] = self.bot.get_user(data[0])
             await self.setup_tourney(*data)
 
+    @tasks.loop(seconds=4)
     async def background_fetch(self):
         if self.register_message and not self.fetching and len(self.waitlist) + len(self.autojoin) > 0:
             self.fetching = True
@@ -79,6 +81,7 @@ class Tournament(commands.GroupCog, group_name='tourney'):
                 self.delayed_messages.append(res)
             self.fetching = False
 
+    @checks.perms(guild=True, mod=True)
     @app_commands.choices(
         mode=[app_commands.Choice(name=i, value=i) for i in ['Normal tournament', 'Raid tournament', 'Fistfight tournament']],
         tier=[app_commands.Choice(name='{1} (Lv. {0} or below)'.format(*i), value=i[1]) for i in config.event_config['tourney']['tiers']]
@@ -165,6 +168,9 @@ class Tournament(commands.GroupCog, group_name='tourney'):
         await asyncio.sleep(config.event_config['tourney']['reg'])
         button.stop()
         await self.register_message.edit(view=None)
+        while len(self.autojoin) + len(self.waitlist) > 0 or not self.fetching:
+            await asyncio.sleep(1)
+        self.background_fetch.stop()
         if self.mode is None: return
         participants = await self.get_brackets(self.participants)
         report = {
@@ -264,6 +270,16 @@ class Tournament(commands.GroupCog, group_name='tourney'):
             file = discord.File(filename='results.txt', fp=BytesIO(pformat(report['results']).encode()))
             await self.bot.log_event('tourney', embed=embed, file=file)
             await self.bot.redis.lpush('report:tourney', json.dumps(report))
+        self.mode = None
+        self.tier = None
+        self.private = False
+        self.disqualified = []
+        self.waitlist = []
+        self.participants = {}
+        self.register_message = None
+        self.autojoin = []
+        self.delayed_messages = []     
+        self.fetching = False
 
 async def setup(bot):
     await bot.add_cog(Tournament(bot))

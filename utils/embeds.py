@@ -534,4 +534,34 @@ def report(report: dict):
                     report['logs'][i]
                 ))
             )
+    elif 'lottery' in report['mode'].lower():
+        sold = len([i for i in report['tickets'] if report['tickets'][i]])
+        embed = discord.Embed(
+            title='Lottery report',
+            description='\n'.join([
+                'Host: <@{}>'.format(report['author']),
+                'Lottery duration: *{}*'.format(utils.get_timedelta(report['timestamps'][1]-report['timestamps'][0])),
+                'The winning number is: **{}**'.format(report['winner'])
+            ]),
+            timestamp=datetime.datetime.fromtimestamp(report['timestamps'][1], tz=datetime.timezone.utc),
+            color=0xFF0000
+        )
+        if report['tickets'][report['winner']]:
+            embed.color = 0x00FF00
+            embed.add_field(
+                name='Winner', value='<@{}>'.format(report['tickets'][report['winner']])
+            ).add_field(
+                name='Tax', value='{:,.0f}'.format(sold * report['tax'] * report['price'])
+            ).add_field(
+                name='Prize', value='{:,.0f}'.format(sold * (1 - report['tax']) * report['price'])
+            )
+        embed.add_field(
+            name='Max tickets per user', value='{}'.format(sold, len(report['max']))
+        ).add_field(
+            name='Tickets sold', value='{}/{}'.format(sold, len(report['tickets']))
+        ).add_field(
+            name='Price per ticket', value='{:,d}'.format(report['price'])
+        ).add_field(
+            name='Total', value='${:,d}'.format(sold * report['price'])
+        )
     return embed

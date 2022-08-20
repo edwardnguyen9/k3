@@ -255,6 +255,12 @@ guild_donation = {
 }
 
 event_config = {
+    'lottery': {
+        'tickets': 100,
+        'max': 10,
+        'price': 3000,
+        'tax': 0.05,
+    },
     'raid': {
         'boss': [
             384190183475511308,
@@ -361,5 +367,6 @@ event_config = {
         'arena:battle': 822024071872905257,
         'arena:lounge': 854596718959263764,
         'lottery': 824719589819809792,
+        'lottery:announce': 824709803276369970
     },
 }

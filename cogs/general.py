@@ -152,6 +152,7 @@ class General(commands.Cog):
     async def _query(self, ctx: commands.Context, *, query: str = ''):
         await _get_query(self.bot, ctx, query)
 
+    @checks.perms(False, all=True)
     @commands.command(
         name='raidstats',
         aliases=['rs'],
