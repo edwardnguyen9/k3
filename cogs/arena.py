@@ -6,7 +6,6 @@ from typing import Union, Optional
 from bot.bot import Kiddo
 from classes import battle
 from classes.paginator import Paginator
-from assets import config
 from utils import errors, utils, embeds, checks
 
 class Arena(commands.GroupCog, group_name='arena'):
@@ -28,7 +27,7 @@ class Arena(commands.GroupCog, group_name='arena'):
 
     @commands.Cog.listener()
     async def on_member_remove(self, member):
-        role_list = utils.get_role_ids('arena')
+        role_list = utils.get_role_ids('arena', self.bot.event_config)
         roles = [i[1] for i in role_list]
         for r in roles:
             if member.get_role(r):
@@ -146,7 +145,7 @@ class Arena(commands.GroupCog, group_name='arena'):
             author, send_message = ctx.author, ctx
         if ctx.guild is None: return
         elif ctx.guild.id != 821988363308630068: raise errors.InsufficientPermissions(ctx, 'This feature is only available in Guild Bill server.')
-        role_list = utils.get_role_ids('arena')
+        role_list = utils.get_role_ids('arena', self.bot.event_config)
         roles = [ctx.guild.get_role(i[1]) for i in role_list]
         roles = [r for r in roles if r is not None]
         
@@ -182,7 +181,7 @@ class Arena(commands.GroupCog, group_name='arena'):
                     timestamp=now,
                     description='\n\n'.join(i)
                 ).set_footer(
-                    text='#{}'.format(self.bot.get_channel(config.event_config['channels']['arena:battle'])), icon_url=author.display_avatar.url
+                    text='#{}'.format(self.bot.get_channel(self.bot.event_config['channels']['arena:battle'])), icon_url=author.display_avatar.url
                 )
             )
         if len(pages) == 1:
@@ -201,7 +200,7 @@ class Arena(commands.GroupCog, group_name='arena'):
         if ctx.guild is None: return
         if ctx.guild is None: return
         elif ctx.guild.id != 821988363308630068: raise errors.InsufficientPermissions(ctx, 'This feature is only available in Guild Bill server.')
-        role_list = utils.get_role_ids('arena')
+        role_list = utils.get_role_ids('arena', self.bot.event_config)
         roles = [ctx.guild.get_role(i[1]) for i in role_list]
         # Check if target is valid and title has only one defender
         title = None
@@ -216,7 +215,7 @@ class Arena(commands.GroupCog, group_name='arena'):
         elif author.get_role(title.id):  # type: ignore
             return await send_message.send('You already have that title')
         # In case arena channel got deleted somehow
-        channel = self.bot.get_channel(config.event_config['channels']['arena:battle'])
+        channel = self.bot.get_channel(self.bot.event_config['channels']['arena:battle'])
         if not channel or not isinstance(channel, discord.abc.Messageable): return await send_message.send('Unable to find arena channel')
         # Redirect to arena channel if challenging in another channel
         elif channel.id != ctx.channel.id: return await send_message.send('Head to {.mention} to fight {.mention}'.format(channel, target), allowed_mentions=discord.AllowedMentions.none())  # type: ignore
@@ -240,12 +239,12 @@ class Arena(commands.GroupCog, group_name='arena'):
         # Get title data
         defender_title_info = discord.utils.find(lambda x: x[1] == title.id, role_list) or []
         # Check if challenger is officer and defender is not (for max officer count)
-        officers = config.event_config['raid']['boss']
+        officers = self.bot.event_config['raid']['boss']
         if author.id in officers and (len(title.members) == 0 or title.members[0].id not in officers):
             # Get all title holders
             holders = [i.members[0].id for i in roles if i is not None and len(i.members) == 1]
             # Get number of officers holding titles
-            limit = config.event_config['arenas'][config.event_config['arenas']['arena']]['officer_limit']
+            limit = self.bot.event_config['arenas'][self.bot.event_config['arenas']['arena']]['officer_limit']
             if (
                 len(set(holders).intersection(officers)) >= limit[0] # If max officers reached
                 or defender_title_info[2] > limit[1] # If title rank is higher than what officers can hold
@@ -411,7 +410,7 @@ class Arena(commands.GroupCog, group_name='arena'):
             return await self.win_title(send_message, title, challenger, None)
             
     async def win_title(self, channel, title, challenger, defender):
-        role_list = utils.get_role_ids('arena')
+        role_list = utils.get_role_ids('arena', self.bot.event_config)
         roles = [i[1] for i in role_list]
         member = challenger.user
         if member is None: return

@@ -37,9 +37,9 @@ class Tournament(commands.GroupCog, group_name='tourney'):
         if self.is_first_ready:
             await self.bot.loading()
             self.guild = self.bot.get_guild(821988363308630068)
-            self.channel = self.bot.get_channel(config.event_config['channels']['tourney'])
-            self.role = self.guild.get_role(config.event_config['roles']['tourney']) if self.guild else None
-            self.banned = config.event_config['tourney']['bans']
+            self.channel = self.bot.get_channel(self.bot.event_config['channels']['tourney'])
+            self.role = self.guild.get_role(self.bot.event_config['roles']['tourney']) if self.guild else None
+            self.banned = self.bot.event_config['tourney']['bans']
             self.check_delayed_tourney.start()
             print(self.__class__.__name__, 'is ready')
             self.is_first_ready = False
@@ -84,7 +84,7 @@ class Tournament(commands.GroupCog, group_name='tourney'):
     @checks.perms(guild=True, mod=True)
     @app_commands.choices(
         mode=[app_commands.Choice(name=i, value=i) for i in ['Normal tournament', 'Raid tournament', 'Fistfight tournament']],
-        tier=[app_commands.Choice(name='{1} (Lv. {0} or below)'.format(*i), value=i[1]) for i in config.event_config['tourney']['tiers']]
+        tier=[app_commands.Choice(name='{1} (Lv. {0} or below)'.format(*i), value=i[1]) for i in self.bot.event_config['tourney']['tiers']]
     )
     @app_commands.command(name='start')
     async def _app_tourney(self, interaction: discord.Interaction, mode: str, tier: str = 'Master', prize: app_commands.Range[int, 0] = 0, private: bool = False, delay: Optional[int] = None):
@@ -125,14 +125,14 @@ class Tournament(commands.GroupCog, group_name='tourney'):
     async def setup_tourney(self, author, mode, private, tier, prize):
         self.private = private
         self.mode = mode
-        self.tier = discord.utils.find(lambda x: x[1] == tier, config.event_config['tourney']['tiers'])
+        self.tier = discord.utils.find(lambda x: x[1] == tier, self.bot.event_config['tourney']['tiers'])
         message = '\n'.join([i for i in [
             self.role,
             '{} {} as been started.'.format('A private' if private else 'A', self.mode.lower()),
             'Tier: {}'.format(tier),
             'Level cap: {}'.format(self.tier[0] or None),  # type: ignore
             'First prize: ${:,d}'.format(prize) if prize else None,
-            'Tournament starts <t:{}:R>'.format(int(discord.utils.utcnow().timestamp() + config.event_config['tourney']['reg'])),
+            'Tournament starts <t:{}:R>'.format(int(discord.utils.utcnow().timestamp() + self.bot.event_config['tourney']['reg'])),
             '**This event is for guild members only**' if private else None
         ] if i is not None])
         await self.bot.log_event(
@@ -157,7 +157,7 @@ class Tournament(commands.GroupCog, group_name='tourney'):
         message_list.append(self.register_message)
         # Get autojoin list
         autojoin = []
-        role_list = utils.get_role_ids('donation')
+        role_list = utils.get_role_ids('donation', self.bot.event_config)
         # Get gold donators
         gold = self.guild.get_role(role_list[0][1]) if len(role_list) > 0 else None  # type: ignore
         if gold: autojoin += [m for m in gold.members if m.id not in self.disqualified]
@@ -165,7 +165,7 @@ class Tournament(commands.GroupCog, group_name='tourney'):
 
         self.background_fetch.start()
         
-        await asyncio.sleep(config.event_config['tourney']['reg'])
+        await asyncio.sleep(self.bot.event_config['tourney']['reg'])
         button.stop()
         await self.register_message.edit(view=None)
         while len(self.autojoin) + len(self.waitlist) > 0 or not self.fetching:

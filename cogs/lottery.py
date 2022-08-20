@@ -6,7 +6,6 @@ from typing import Optional
 from asyncio import sleep
 
 from bot.bot import Kiddo
-from assets.config import event_config
 from classes.paginator import Paginator
 from utils import utils, checks, embeds
 
@@ -25,9 +24,9 @@ class Lottery(commands.GroupCog, group_name='lottery'):
     async def on_ready(self):
         if self.is_first_ready:
             await self.bot.loading()
-            self.announcement = self.bot.get_channel(event_config['channels']['lottery:announce'])
-            self.booth = self.bot.get_channel(event_config['channels']['lottery'])
-            self.role = self.booth.guild.get_role(event_config['roles']['lottery'])  # type: ignore
+            self.announcement = self.bot.get_channel(self.bot.event_config['channels']['lottery:announce'])
+            self.booth = self.bot.get_channel(self.bot.event_config['channels']['lottery'])
+            self.role = self.booth.guild.get_role(self.bot.event_config['roles']['lottery'])  # type: ignore
             res = await self.bot.redis.pipeline(transaction=True).hgetall('lottery:config').hgetall('lottery:tickets').execute()  # type: ignore
             for i in res[0]:
                 self.lottery[i] = json.loads(res[0][i])
@@ -100,10 +99,10 @@ class Lottery(commands.GroupCog, group_name='lottery'):
         self.lottery = {
             'mode': 'lottery',
             'author': interaction.user.id,
-            'tickets': tickets or event_config['lottery']['tickets'],
-            'max': _max or event_config['lottery']['max'],
-            'price': price or event_config['lottery']['price'],
-            'tax': tax or event_config['lottery']['tax'],
+            'tickets': tickets or self.bot.event_config['lottery']['tickets'],
+            'max': _max or self.bot.event_config['lottery']['max'],
+            'price': price or self.bot.event_config['lottery']['price'],
+            'tax': tax or self.bot.event_config['lottery']['tax'],
             'timestamp': discord.utils.utcnow().timestamp(),
         }
         for i in range(self.lottery['tickets']):

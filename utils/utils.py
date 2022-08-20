@@ -3,7 +3,6 @@ from typing import Union
 from decimal import Decimal
 
 from assets import idle
-from assets.config import event_config
 
 def pager(entries, chunk: int, similar_chunk: bool = False):
     if similar_chunk:
@@ -174,7 +173,7 @@ def get_market_entry(item, trimmed = False):
         res['signature'] = item['signature']
     return res
 
-def get_role_ids(key: str):
+def get_role_ids(key: str, event_config):
     role_list = []
     # if 'misc' in cfg:
         # config = cfg['misc']

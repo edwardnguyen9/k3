@@ -64,11 +64,11 @@ class Raid(commands.GroupCog, group_name='raid'):
             if self.guild is not None:
                 role = self.guild.get_role(config.guild_bill['officer_role'])
                 if role is not None: self.default_bosses = [u.id for u in role.members]
-                title_data = utils.get_role_ids('arena')
+                title_data = utils.get_role_ids('arena', self.bot.event_config)
                 titles = [self.guild.get_role(i[1]) for i in title_data]
                 self.arena_titles = [t for t in titles if t is not None]
-                self.channel = self.guild.get_channel(config.event_config['channels']['raid'])
-                self.role = self.guild.get_role(config.event_config['roles']['raid'])
+                self.channel = self.guild.get_channel(self.bot.event_config['channels']['raid'])
+                self.role = self.guild.get_role(self.bot.event_config['roles']['raid'])
             self.reset_announcements.start()
             delayed = await self.bot.redis.hgetall('delay:raid')
             for k, v in delayed.items():
@@ -575,12 +575,12 @@ class Raid(commands.GroupCog, group_name='raid'):
         # Get autojoin list
         autojoin = []
         #Get arena titles
-        arena_list = utils.get_role_ids('arena')
+        arena_list = utils.get_role_ids('arena', self.bot.event_config)
         # if 'arena' in config.config[self.guild.id]['misc']:  # type: ignore
         for i in map(lambda x: self.guild.get_role(x[1]), arena_list): # type: ignore
             autojoin += [m for m in i.members if m.id not in self.disqualified]  # type: ignore
         
-        role_list = utils.get_role_ids('donation')
+        role_list = utils.get_role_ids('donation', self.bot.event_config)
         # Get gold donators
         gold = self.guild.get_role(role_list[0][1]) if len(role_list) > 0 else None  # type: ignore
         if gold: autojoin += [m for m in gold.members if m.id not in self.disqualified]
@@ -626,7 +626,7 @@ class Raid(commands.GroupCog, group_name='raid'):
         # Boss original HP
         original_hp = self.boss.hp  # type: ignore
         # Start time and duration
-        end_time = (start_time:=discord.utils.utcnow()) + datetime.timedelta(seconds=config.event_config['raid']['time'])
+        end_time = (start_time:=discord.utils.utcnow()) + datetime.timedelta(seconds=self.bot.event_config['raid']['time'])
         # Fight
         turn = await battle.boss_battle(self.channel, fighters, self.boss, end_time)
         blessed = None
@@ -666,7 +666,7 @@ class Raid(commands.GroupCog, group_name='raid'):
             else:
                 boss_board[b_id] = [1, 1]
             # If boss is an officer
-            if self.boss.user.id in config.event_config['raid']['boss']:  # type: ignore
+            if self.boss.user.id in self.bot.event_config['raid']['boss']:  # type: ignore
                 try:
                     await self.boss.user.send(raid.prompts['belthazor']['possess'].format(guild=self.guild))  # type: ignore
                 except discord.Forbidden:
@@ -719,7 +719,7 @@ class Raid(commands.GroupCog, group_name='raid'):
                 raider_board[f_id] = [1, 0]
         
         # Start time and duration
-        end_time = (start_time:=discord.utils.utcnow()) + datetime.timedelta(seconds=config.event_config['raid']['time'])
+        end_time = (start_time:=discord.utils.utcnow()) + datetime.timedelta(seconds=self.bot.event_config['raid']['time'])
         # Report
         report = {}
         report.update({'mode': self.mode})
@@ -787,7 +787,7 @@ class Raid(commands.GroupCog, group_name='raid'):
         # Boss original HP
         original_hp = self.boss.hp  # type: ignore
         # Start time and duration
-        end_time = (start_time:=discord.utils.utcnow()) + datetime.timedelta(seconds=config.event_config['raid']['time'])
+        end_time = (start_time:=discord.utils.utcnow()) + datetime.timedelta(seconds=self.bot.event_config['raid']['time'])
         # Fight
         turn = await battle.boss_battle(self.channel, fighters, self.boss, end_time)
         # Result messages
@@ -915,7 +915,7 @@ class Raid(commands.GroupCog, group_name='raid'):
             'mode': self.mode,
             'city': list(defenses[0])
         }
-        end_time = (start_time:=discord.utils.utcnow()) + datetime.timedelta(seconds=config.event_config['raid']['time'])
+        end_time = (start_time:=discord.utils.utcnow()) + datetime.timedelta(seconds=self.bot.event_config['raid']['time'])
         turn, destroyed, dealt = await battle.city_battle(self.channel, fighters, defenses, end_time)
         timestamp = discord.utils.utcnow()
         if len(defenses) > 1:

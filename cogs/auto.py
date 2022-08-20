@@ -30,7 +30,7 @@ class Auto(commands.GroupCog, group_name='update'):
     async def on_ready(self):
         if self.is_first_ready:
             await self.bot.loading()
-            donation_cfg = config.event_config['donator']
+            donation_cfg = self.bot.event_config['donator']
             for k, v in donation_cfg.items():
                 if k.isdecimal():
                     self.donation_log[k] = self.bot.get_channel(v['donation:channel'])
@@ -475,7 +475,7 @@ class Auto(commands.GroupCog, group_name='update'):
                         inline=False
                     )
         else:
-            log_data = config.event_config['donator'][guild] if 'guild' in config.event_config['donator'] else None
+            log_data = self.bot.event_config['donator'][guild] if 'guild' in self.bot.event_config['donator'] else None
             if not log_data: raise ValueError('Guild {name} has not been registered.'.format(name=self.bot.idle_guilds[guild][0]))
             log_started = (
                 datetime.datetime.fromtimestamp(log_data['timestamp'], datetime.timezone.utc)
@@ -530,7 +530,7 @@ class Auto(commands.GroupCog, group_name='update'):
             return False
 
     async def remove_donator_roles(self, channel: discord.TextChannel):
-        roles = [(channel.guild.get_role(r[1]), r[2]) for r in utils.get_role_ids('donation')]
+        roles = [(channel.guild.get_role(r[1]), r[2]) for r in utils.get_role_ids('donation', self.bot.event_config)]
         for r in roles:
             if r[0]:
                 members = list(r[0].members)
@@ -538,7 +538,7 @@ class Auto(commands.GroupCog, group_name='update'):
 
     async def add_donator_roles(self, guild, month):
         channel = self.donation_log[guild]
-        roles = [(channel.guild.get_role(r[1]), r[2]) for r in utils.get_role_ids('donation')]
+        roles = [(channel.guild.get_role(r[1]), r[2]) for r in utils.get_role_ids('donation', self.bot.event_config)]
         roles = [r for r in roles if r[0] is not None]
         try:
             (res, status) = await self.bot.idle_query(idle.queries['guild'].format(id=guild))

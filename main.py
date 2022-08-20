@@ -4,7 +4,6 @@ from discord.ext import commands
 from aiohttp import ClientSession
 from dotenv import load_dotenv
 
-
 from bot.bot import Kiddo
 
 load_dotenv()

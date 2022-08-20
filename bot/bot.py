@@ -10,6 +10,7 @@ from pprint import pformat
 from dotenv import load_dotenv
 
 from assets import idle, postgres
+from assets.config import event_config
 from classes.profile import Profile
 from utils import errors, utils
 
@@ -50,6 +51,7 @@ class Kiddo(commands.Bot):
         self.api_guilds = []
         self.donator_guilds = []
         self.idle_guilds = {}
+        self.event_config = {}
         self.api_available = True
         self.crates = {}
         self.uptime = discord.utils.utcnow()
@@ -203,6 +205,12 @@ class Kiddo(commands.Bot):
                 updated[s_id] = PREFIX
         if len(updated) > 0:
             await self.redis.hset('prefix', mapping=updated)
+
+        res = await self.redis.get('event_config')
+        if res is None:
+            res = event_config
+            await self.redis.set('event_config', json.dumps(res))
+        self.event_config = res
 
         cfglist = []
 
